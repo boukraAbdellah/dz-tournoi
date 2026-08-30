@@ -1,0 +1,31 @@
+{
+  "name": "sport-competition",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Local-first combat sports competition management platform (Algeria)",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "node --watch packages/api/src/index.ts",
+    "dev:web": "npm run dev -w packages/web",
+    "dev": "npm run dev:api",
+    "build:web": "npm run build -w packages/web",
+    "build": "npm run build:web",
+    "typecheck": "npm run typecheck -w packages/core && npm run typecheck -w packages/api && npm run typecheck -w packages/web",
+    "test": "npm run test -w packages/core",
+    "db:reset": "node packages/core/src/seed/reset-db.ts",
+    "seed:demo": "node packages/core/src/seed/seed-demo.ts",
+    "seed:draw-test": "node packages/core/src/seed/seed-draw-test.ts",
+    "seed:tournament": "node packages/core/src/seed/seed-tournament.ts",
+    "check:draw": "node check-draw.js",
+    "start": "npm run build && node packages/api/src/index.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
