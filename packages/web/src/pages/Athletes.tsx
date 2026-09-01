@@ -6,9 +6,11 @@ import { api } from '../api';
 import type { Athlete, Club } from '../types';
 import PageHeader from '../components/PageHeader';
 import DateInput from '../components/DateInput';
+import { useConfirm } from '../components/common/ConfirmDialog';
 
 export default function AthletesPage() {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const [athletes, setAthletes] = useState<Athlete[]>([]);
   const [clubs, setClubs] = useState<Club[]>([]);
   const [editing, setEditing] = useState<Athlete | null>(null);
@@ -107,7 +109,14 @@ export default function AthletesPage() {
   };
 
   const remove = async (id: number) => {
-    if (!window.confirm(t('common.confirm'))) return;
+    const ok = await confirm({
+      title: "Supprimer l'athlète",
+      message: t('common.confirm', 'Êtes-vous sûr de vouloir supprimer cet athlète ?'),
+      confirmLabel: "Supprimer",
+      cancelLabel: "Annuler",
+      variant: "danger",
+    });
+    if (!ok) return;
     try {
       await api.del(`/athletes/${id}`);
       load();

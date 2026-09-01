@@ -5,9 +5,11 @@ import { api } from '../api';
 import { useAppSettings } from '../settings';
 import type { City, Club, Wilaya } from '../types';
 import PageHeader from '../components/PageHeader';
+import { useConfirm } from '../components/common/ConfirmDialog';
 
 export default function ClubsPage() {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const { lang } = useAppSettings();
   const [clubs, setClubs] = useState<Club[]>([]);
   const [wilayas, setWilayas] = useState<Wilaya[]>([]);
@@ -62,7 +64,7 @@ export default function ClubsPage() {
     setForm({
       name: club.name,
       wilayaId: String(club.wilayaId),
-      cityId: String(club.cityId),
+      cityId: club.cityId ? String(club.cityId) : '',
       phone: club.phone ?? '',
       email: club.email ?? '',
       address: club.address ?? '',
@@ -72,13 +74,12 @@ export default function ClubsPage() {
     setOpen(true);
   };
 
-  const validate = (): boolean => {
-    const e: Record<string, string> = {};
-    if (!(form.name ?? '').trim()) e.name = 'Required';
-    if (!form.wilayaId) e.wilayaId = 'Required';
-    if (!form.cityId) e.cityId = 'Required';
-    setErrors(e);
-    return Object.keys(e).length === 0;
+  const validate = () => {
+    const errs: Record<string, string> = {};
+    if (!(form.name ?? '').trim()) errs.name = t('clubs.errors.nameRequired', 'Requis');
+    if (!form.wilayaId) errs.wilayaId = t('clubs.errors.wilayaRequired', 'Requis');
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
   };
 
   const submit = async () => {
@@ -88,7 +89,7 @@ export default function ClubsPage() {
       const payload = {
         name: (form.name ?? '').trim(),
         wilayaId: Number(form.wilayaId),
-        cityId: Number(form.cityId),
+        cityId: form.cityId ? Number(form.cityId) : null,
         phone: form.phone || null,
         email: form.email || null,
         address: form.address || null,
@@ -109,7 +110,14 @@ export default function ClubsPage() {
   };
 
   const remove = async (id: number) => {
-    if (!window.confirm(t('common.confirm'))) return;
+    const ok = await confirm({
+      title: "Supprimer le club",
+      message: t('common.confirm', 'Êtes-vous sûr de vouloir supprimer ce club ?'),
+      confirmLabel: "Supprimer",
+      cancelLabel: "Annuler",
+      variant: "danger",
+    });
+    if (!ok) return;
     try {
       await api.del(`/clubs/${id}`);
       load();

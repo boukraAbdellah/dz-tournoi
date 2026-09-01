@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, Pencil, UserPlus } from "lucide-react";
 import { useCompetition, catName } from "./CompetitionHook";
+import { useConfirm } from "../common/ConfirmDialog";
 import type { CompetitionDetail } from "./types";
 
 function CascadeSelect({
@@ -39,8 +40,12 @@ function CascadeSelect({
       </select>
       <select value={weightDivisionId} onChange={(e) => onWeightChange(e.target.value)}
         className="h-9 w-full rounded-lg border border-border bg-surface px-2 text-sm text-ink outline-none focus:border-primary/40">
-        <option value="">{t("step.weightDiv", "Poids")}</option>
-        {weights.map((w: any) => <option key={w.id} value={w.id}>{w.weightDivisionName}</option>)}
+        <option value="">{t("step.weightDivision", "Cat. de poids")}</option>
+        {weights.map((w: any) => (
+          <option key={w.id} value={w.weightDivisionId}>
+            {w.weightDivisionName} {w.minKg != null && w.maxKg != null ? `(${w.minKg}–${w.maxKg} kg)` : w.maxKg != null ? `(-${w.maxKg} kg)` : `(+${w.minKg} kg)`}
+          </option>
+        ))}
       </select>
     </div>
   );
@@ -54,6 +59,7 @@ interface Props {
 
 export default function RegistrationsTable({ onOpenRegister, onOpenInline, onOpenBulk }: Props) {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const { comp, registrations, isOpen, isClosed, enabledCategories, withdraw, updateWeight, updateCategory } = useCompetition();
   const [editingWeight, setEditingWeight] = useState<{ regId: number; value: string } | null>(null);
   const [editingCategory, setEditingCategory] = useState<{ regId: number; gender: string; ageCategoryId: string; weightDivisionId: string } | null>(null);
@@ -153,8 +159,21 @@ export default function RegistrationsTable({ onOpenRegister, onOpenInline, onOpe
                       <td className="px-5 py-2.5 text-ink-muted">{r.clubName ?? "—"}</td>
                       <td className="px-5 py-2.5 text-right">
                         {r.status === "REGISTERED" && isOpen && (
-                          <button onClick={() => { if (!window.confirm(t("common.confirm", "Confirmer ?"))) return; withdraw(r.id); }}
-                            className="text-xs text-danger hover:text-danger/80 transition-colors">{t("common.delete")}</button>
+                          <button
+                            onClick={async () => {
+                              const ok = await confirm({
+                                title: "Retirer l'athlète",
+                                message: `Êtes-vous sûr de vouloir retirer ${r.firstName} ${r.lastName} de cette compétition ?`,
+                                confirmLabel: "Retirer",
+                                cancelLabel: "Annuler",
+                                variant: "danger",
+                              });
+                              if (ok) withdraw(r.id);
+                            }}
+                            className="text-xs text-danger hover:text-danger/80 transition-colors"
+                          >
+                            {t("common.delete")}
+                          </button>
                         )}
                         {r.status === "WITHDRAWN" && <span className="text-xs text-ink-faint">{t("competitions.withdrawn", "Retiré")}</span>}
                       </td>

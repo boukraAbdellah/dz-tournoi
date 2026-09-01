@@ -7,6 +7,7 @@ import { isoToFr } from '../utils/dates';
 import PageHeader from '../components/PageHeader';
 import StatusBadge from '../components/StatusBadge';
 import DateInput from '../components/DateInput';
+import { useConfirm } from '../components/common/ConfirmDialog';
 import type { SportTemplate } from '../types';
 
 interface Competition {
@@ -31,6 +32,7 @@ const STATUS_TONE: Record<string, 'default' | 'success' | 'warning' | 'info' | '
 
 export default function CompetitionsPage() {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [templates, setTemplates] = useState<SportTemplate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,7 +70,14 @@ export default function CompetitionsPage() {
   };
 
   const remove = async (id: number) => {
-    if (!window.confirm(t('competitions.confirmDelete'))) return;
+    const ok = await confirm({
+      title: "Supprimer la compétition",
+      message: t('competitions.confirmDelete', 'Êtes-vous sûr de vouloir supprimer cette compétition ?'),
+      confirmLabel: "Supprimer",
+      cancelLabel: "Annuler",
+      variant: "danger",
+    });
+    if (!ok) return;
     try {
       await api.del(`/competitions/${id}`);
       load();

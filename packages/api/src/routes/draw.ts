@@ -182,14 +182,20 @@ function syncRound1ByeAdvancements(tx: any, categoryId: number) {
 }
 
 // ── POST /:id/generate-draw ────────────────────────────────────────────
-// Generate brackets for all enabled categories with registered athletes.
+// Generate brackets for all (or a specific) enabled categories with registered athletes.
 
 drawRouter.post('/:id/generate-draw', (req, res) => {
   const compId = Number(req.params.id);
+  const targetCatId = req.query.catId
+    ? Number(req.query.catId)
+    : req.body?.categoryId
+      ? Number(req.body.categoryId)
+      : null;
+
   const db = getDb();
   const comp = db.select().from(competitions).where(eq(competitions.id, compId)).get();
   if (!comp) return res.status(404).json({ error: 'Competition not found' });
-  if (!canTransition(comp.status as CompetitionStatus, 'DRAW_GENERATED')) {
+  if (comp.status !== 'DRAW_GENERATED' && !canTransition(comp.status as CompetitionStatus, 'DRAW_GENERATED')) {
     return res.status(400).json({ error: `Cannot generate draw from status ${comp.status}` });
   }
 
@@ -207,12 +213,20 @@ drawRouter.post('/:id/generate-draw', (req, res) => {
   }
 
   // Get enabled categories with at least 1 registration
-  const cats = db.select().from(competitionCategories)
+  const allCats = db.select().from(competitionCategories)
     .where(and(
       eq(competitionCategories.competitionId, compId),
       eq(competitionCategories.enabled, true),
     ))
     .all();
+
+  const cats = targetCatId != null
+    ? allCats.filter((c) => c.id === targetCatId)
+    : allCats;
+
+  if (targetCatId != null && cats.length === 0) {
+    return res.status(404).json({ error: 'Category not found or not enabled for this competition' });
+  }
 
   let totalMatches = 0;
   let categoriesProcessed = 0;
@@ -309,19 +323,133 @@ drawRouter.post('/:id/generate-draw', (req, res) => {
       categoriesProcessed++;
     }
 
-    // Transition competition status
-    tx.update(competitions)
-      .set({ status: 'DRAW_GENERATED' })
-      .where(eq(competitions.id, compId))
-      .run();
+    // Transition competition status if not already DRAW_GENERATED
+    if (comp.status !== 'DRAW_GENERATED') {
+      tx.update(competitions)
+        .set({ status: 'DRAW_GENERATED' })
+        .where(eq(competitions.id, compId))
+        .run();
+    }
   });
 
   res.json({
     ok: true,
     categoriesProcessed,
     totalMatches,
-    audit: {}, // TODO: aggregate audit across categories
+    targetCategoryId: targetCatId,
   });
+});
+
+// ── POST /:id/categories/:catId/generate-draw ──────────────────────────
+drawRouter.post('/:id/categories/:catId/generate-draw', (req, res) => {
+  req.query.catId = req.params.catId;
+  const compId = Number(req.params.id);
+  const targetCatId = Number(req.params.catId);
+
+  const db = getDb();
+  const comp = db.select().from(competitions).where(eq(competitions.id, compId)).get();
+  if (!comp) return res.status(404).json({ error: 'Competition not found' });
+  if (comp.status !== 'DRAW_GENERATED' && !canTransition(comp.status as CompetitionStatus, 'DRAW_GENERATED')) {
+    return res.status(400).json({ error: `Cannot generate draw from status ${comp.status}` });
+  }
+
+  const cat = db.select().from(competitionCategories)
+    .where(and(
+      eq(competitionCategories.id, targetCatId),
+      eq(competitionCategories.competitionId, compId),
+      eq(competitionCategories.enabled, true),
+    ))
+    .get();
+  if (!cat) return res.status(404).json({ error: 'Category not found or not enabled' });
+
+  let totalMatches = 0;
+  db.transaction((tx) => {
+    const regs = tx.select({
+      regId: registrations.id,
+      athleteId: athletes.id,
+      weightKg: registrations.weightKg,
+      clubIdAtRegistration: registrations.clubIdAtRegistration,
+    })
+      .from(registrations)
+      .innerJoin(athletes, eq(registrations.athleteId, athletes.id))
+      .where(and(
+        eq(registrations.competitionId, compId),
+        eq(registrations.subDepartmentId, cat.id),
+        eq(registrations.status, 'REGISTERED'),
+      ))
+      .all();
+
+    if (regs.length >= 2) {
+      tx.delete(matches).where(eq(matches.competitionCategoryId, cat.id)).run();
+      tx.update(competitionCategories)
+        .set({ rngSeed: null, drawGeneratedAt: null, drawLockedAt: null })
+        .where(eq(competitionCategories.id, cat.id))
+        .run();
+
+      const participants: DrawParticipant[] = regs.map((r) => {
+        let wilayaId: number | null = null;
+        let cityId: number | null = null;
+        if (r.clubIdAtRegistration) {
+          const club = tx.select().from(clubs).where(eq(clubs.id, r.clubIdAtRegistration)).get();
+          if (club) { wilayaId = club.wilayaId; cityId = club.cityId; }
+        }
+        return { registrationId: r.regId, wilayaId, cityId, clubId: r.clubIdAtRegistration };
+      });
+
+      const seed = Math.floor(Math.random() * 2147483647);
+      const bracket = generateBracket(participants, { bronze: comp.bronzeMatchEnabled, seed });
+
+      for (const round of Object.values(bracket.matches)) {
+        for (const m of round) {
+          const regA = m.competitorAId != null
+            ? regs.find((r) => r.regId === m.competitorAId)?.regId ?? null
+            : null;
+          const regB = m.competitorBId != null
+            ? regs.find((r) => r.regId === m.competitorBId)?.regId ?? null
+            : null;
+
+          const isRound1Bye = m.round === 1 && (m.isBye || regA == null || regB == null);
+          const byeWinner = isRound1Bye ? (regA ?? regB) : null;
+
+          tx.insert(matches).values({
+            competitionCategoryId: cat.id,
+            round: m.round,
+            form: m.form,
+            ordinal: m.ordinal,
+            isBronze: m.isBronze,
+            competitorAId: regA,
+            competitorBId: regB,
+            scoreA: null,
+            scoreB: null,
+            resultType: 'REGULAR',
+            winnerRegistrationId: byeWinner,
+            status: isRound1Bye ? 'BYE' : 'PENDING',
+          }).run();
+
+          totalMatches++;
+        }
+      }
+
+      syncRound1ByeAdvancements(tx, cat.id);
+
+      tx.update(competitionCategories)
+        .set({
+          rngSeed: seed,
+          drawGeneratedAt: new Date().toISOString(),
+        })
+        .where(eq(competitionCategories.id, cat.id))
+        .run();
+    }
+
+    if (comp.status !== 'DRAW_GENERATED') {
+      tx.update(competitions)
+        .set({ status: 'DRAW_GENERATED' })
+        .where(eq(competitions.id, compId))
+        .run();
+    }
+  });
+
+  res.json({ ok: true, categoriesProcessed: 1, totalMatches, targetCategoryId: targetCatId });
 });
 
 // ── GET /:id/bracket/:catId ────────────────────────────────────────────

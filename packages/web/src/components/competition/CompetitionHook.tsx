@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useCallback, createContext, useContext, type ReactNode } from "react";
 import { api } from "../../api";
+import { useConfirm } from "../common/ConfirmDialog";
 import type {
   CompetitionDetail,
   Reg,
@@ -32,6 +33,7 @@ interface CompetitionContextValue {
   loadRankings: () => Promise<void>;
   rankings: CompetitionRankingsResult | null;
   generateDraw: () => Promise<void>;
+  generateCategoryDraw: (catId: number) => Promise<void>;
   lockDraw: () => Promise<void>;
   enterResult: (matchId: number, scoreA: number, scoreB: number, resultType: string, winnerRegistrationId?: number | null) => Promise<void>;
   swapAthletes: (matchIdA: number, matchIdB: number) => Promise<void>;
@@ -238,12 +240,20 @@ export function CompetitionProvider({ id, children }: { id: string | undefined; 
   const isCompleted = comp?.status === "COMPLETED";
   const regCount = registrations.filter((r) => r.status === "REGISTERED").length;
   const enabledCategories = comp?.categories.filter((c) => c.enabled) ?? [];
+  const confirm = useConfirm();
 
   // ── Draw actions ─────────────────────────────────────────────────────
 
   const generateDraw = async () => {
     if (!id) return;
-    if (!window.confirm("Êtes-vous sûr de vouloir régénérer le tableau ? Le tableau actuel sera remplacé.")) return;
+    const ok = await confirm({
+      title: "Régénérer tout le tournoi",
+      message: "Êtes-vous sûr de vouloir régénérer le tableau de toutes les catégories ? Les tableaux actuels non confirmés seront remplacés.",
+      confirmLabel: "Régénérer tout",
+      cancelLabel: "Annuler",
+      variant: "warning",
+    });
+    if (!ok) return;
     setDrawLoading(true);
     try {
       const result = await api.post<{ ok: boolean; categoriesProcessed: number; totalMatches: number }>(
@@ -263,9 +273,45 @@ export function CompetitionProvider({ id, children }: { id: string | undefined; 
     }
   };
 
+  const generateCategoryDraw = async (catId: number) => {
+    if (!id) return;
+    const catObj = comp?.categories.find((c) => c.id === catId);
+    const catLabel = catObj
+      ? `${catObj.ageCategoryName} · ${catObj.weightDivisionName} (${catObj.gender})`
+      : "cette catégorie";
+    const ok = await confirm({
+      title: `Régénérer : ${catLabel}`,
+      message: `Êtes-vous sûr de vouloir régénérer le tableau pour ${catLabel} ? Le tableau actuel de cette catégorie sera remplacé.`,
+      confirmLabel: "Régénérer la catégorie",
+      cancelLabel: "Annuler",
+      variant: "warning",
+    });
+    if (!ok) return;
+    setDrawLoading(true);
+    try {
+      const result = await api.post<{ ok: boolean; categoriesProcessed: number; totalMatches: number }>(
+        `/competitions/${id}/categories/${catId}/generate-draw`,
+      );
+      load();
+      await loadBracket(catId);
+      addToast(`Tableau régénéré pour ${catLabel} (${result.totalMatches} match(s))`);
+    } catch (e: any) {
+      addToast(e.message || "Erreur", "error");
+    } finally {
+      setDrawLoading(false);
+    }
+  };
+
   const lockDraw = async () => {
     if (!id) return;
-    if (!window.confirm("Êtes-vous sûr de vouloir confirmer le tableau ? Aucune modification ne sera possible après confirmation.")) return;
+    const ok = await confirm({
+      title: "Confirmer le tableau",
+      message: "Êtes-vous sûr de vouloir confirmer le tableau ? Aucune modification des appariements ne sera possible après confirmation.",
+      confirmLabel: "Confirmer le tableau",
+      cancelLabel: "Annuler",
+      variant: "primary",
+    });
+    if (!ok) return;
     try {
       await api.post(`/competitions/${id}/lock-draw`);
       load();
@@ -371,7 +417,14 @@ export function CompetitionProvider({ id, children }: { id: string | undefined; 
     if (!enabled) {
       const cat = comp?.categories.find((c) => c.id === catId);
       if (cat && cat.registrationCount > 0) {
-        if (!window.confirm(`Cette catégorie contient ${cat.registrationCount} athlète(s). Les inscriptions seront bloquées.`)) return;
+        const ok = await confirm({
+          title: "Désactiver la catégorie",
+          message: `Cette catégorie contient ${cat.registrationCount} athlète(s). Les inscriptions seront bloquées.`,
+          confirmLabel: "Désactiver",
+          cancelLabel: "Annuler",
+          variant: "warning",
+        });
+        if (!ok) return;
       }
     }
     try {
@@ -388,7 +441,14 @@ export function CompetitionProvider({ id, children }: { id: string | undefined; 
       const cats = comp?.categories.filter((c) => c.enabled && c.gender === filter.gender) ?? [];
       const totalRegs = cats.reduce((s, c) => s + c.registrationCount, 0);
       if (totalRegs > 0) {
-        if (!window.confirm(`Ces catégories contiennent ${totalRegs} athlète(s). Les inscriptions seront bloquées.`)) return;
+        const ok = await confirm({
+          title: "Désactiver les catégories",
+          message: `Ces catégories contiennent ${totalRegs} athlète(s). Les inscriptions seront bloquées.`,
+          confirmLabel: "Désactiver",
+          cancelLabel: "Annuler",
+          variant: "warning",
+        });
+        if (!ok) return;
       }
     }
     try {
@@ -563,6 +623,7 @@ export function CompetitionProvider({ id, children }: { id: string | undefined; 
     loadRankings,
     rankings,
     generateDraw,
+    generateCategoryDraw,
     lockDraw,
     enterResult,
     swapAthletes,
