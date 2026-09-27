@@ -30,6 +30,8 @@ export interface CompetitionDetail {
   }>;
 }
 
+export type CompetitionCategory = CompetitionDetail['categories'][number];
+
 export interface Reg {
   id: number;
   athleteId: number;
@@ -80,6 +82,10 @@ export interface BracketMatch {
   nameB: string | null;
   clubA: string | null;
   clubB: string | null;
+  wilayaA?: string | null;
+  wilayaB?: string | null;
+  wilayaCodeA?: number | null;
+  wilayaCodeB?: number | null;
   scoreA: number | null;
   scoreB: number | null;
   resultType: string;

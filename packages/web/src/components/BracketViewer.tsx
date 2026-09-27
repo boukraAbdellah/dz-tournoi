@@ -8,7 +8,7 @@ import {
   X,
 } from "lucide-react";
 
-interface BracketMatch {
+export interface BracketMatch {
   id: number;
   round: number;
   form: string;
@@ -20,6 +20,10 @@ interface BracketMatch {
   nameB: string | null;
   clubA: string | null;
   clubB: string | null;
+  wilayaA?: string | null;
+  wilayaB?: string | null;
+  wilayaCodeA?: number | null;
+  wilayaCodeB?: number | null;
   scoreA: number | null;
   scoreB: number | null;
   resultType: string;
@@ -63,6 +67,49 @@ interface BracketViewerProps {
   enableSwap?: boolean;
 }
 
+/**
+ * Shorten / abbreviate Algerian wilaya names in French only (as requested).
+ * Common long wilayas are abbreviated to standard tournament acronyms (B.B.A, S.B.A, O.E.B, etc.).
+ */
+export function formatWilayaShortFr(
+  wilayaName?: string | null,
+  _wilayaCode?: number | null,
+): string {
+  if (!wilayaName) return "";
+  const trimmed = wilayaName.trim();
+
+  const abbrevs: Record<string, string> = {
+    "Bordj Bou Arréridj": "B.B.A",
+    "Bordj Bou Arreridj": "B.B.A",
+    "Sidi Bel Abbès": "S.B.A",
+    "Sidi Bel Abbes": "S.B.A",
+    "Oum El Bouaghi": "O.E.B",
+    "Bordj Badji Mokhtar": "B.B.M",
+    "Aïn Témouchent": "A.Témouch",
+    "Ain Temouchent": "A.Témouch",
+    "Aïn Defla": "A.Defla",
+    "Ain Defla": "A.Defla",
+    "Constantine": "Const.",
+    "Mostaganem": "Mosta.",
+    "Tamanrasset": "Tam.",
+    "Tissemsilt": "Tissems.",
+    "Ouled Djellal": "O.Djellal",
+    "Souk Ahras": "S.Ahras",
+    "Tizi Ouzou": "T.Ouzou",
+    "El M'Ghair": "M'Ghair",
+    "In Guezzam": "I.Guezzam",
+    "El Bayadh": "El Bayadh",
+    "El Oued": "El Oued",
+    "El Tarf": "El Tarf",
+  };
+
+  if (abbrevs[trimmed]) return abbrevs[trimmed];
+  if (trimmed.length > 8) {
+    return trimmed.slice(0, 7) + "…";
+  }
+  return trimmed;
+}
+
 export default function BracketViewer({
   bracket,
   onEnterResult,
@@ -84,17 +131,29 @@ export default function BracketViewer({
     return map;
   }, [bracket.audit?.details]);
 
-  // Group matches by round
+  // Separate regular elimination tree matches from bronze match
+  const bronzeMatch = useMemo(() => {
+    return bracket.matches.find((m) => m.isBronze);
+  }, [bracket.matches]);
+
+  const treeMatches = useMemo(() => {
+    return bracket.matches.filter((m) => !m.isBronze);
+  }, [bracket.matches]);
+
+  // Group tree matches by round
   const rounds = useMemo(() => {
     const map = new Map<number, BracketMatch[]>();
-    for (const m of bracket.matches) {
+    for (const m of treeMatches) {
       if (!map.has(m.round)) map.set(m.round, []);
       map.get(m.round)!.push(m);
     }
+    for (const list of map.values()) {
+      list.sort((a, b) => a.ordinal - b.ordinal);
+    }
     return map;
-  }, [bracket.matches]);
+  }, [treeMatches]);
 
-  const roundCount = bracket.rounds;
+  const roundCount = Math.max(bracket.rounds, 1);
 
   // Round labels (French)
   const roundLabel = (matchesInRound: number): string => {
@@ -126,10 +185,15 @@ export default function BracketViewer({
 
   const cancelSwap = useCallback(() => setSwapFirst(null), []);
 
-  // Compute spacing: later rounds have fewer matches
-  const matchHeight = 64; // px per match
-  const matchGap = 16; // px between matches
-  const roundWidth = 224; // px per round column
+  // Compute spacing & exact tree height
+  const roundWidth = 244; // px per round column
+  const connectorWidth = 28; // px between round columns
+  const baseSlotHeight = 84; // base px per match slot in Round 1
+  const round1Slots = Math.max(
+    rounds.get(1)?.length ?? 1,
+    2 ** Math.max(roundCount - 1, 0),
+  );
+  const totalTreeHeight = Math.max(280, round1Slots * baseSlotHeight);
 
   const auditTotal =
     (bracket.audit?.sameWilaya ?? 0) +
@@ -234,99 +298,197 @@ export default function BracketViewer({
         </div>
       )}
 
-      {/* Bracket grid */}
-      <div className="inline-flex gap-0 min-w-max pb-4">
+      {/* Bracket tree grid */}
+      <div className="inline-flex items-stretch min-w-max pb-4">
         {Array.from({ length: roundCount }, (_, ri) => {
           const roundNum = ri + 1;
-          const matchesInRound = rounds.get(roundNum)?.length ?? 0;
+          const slotsInRound = Math.max(
+            1,
+            Math.floor(2 ** (roundCount - roundNum)),
+          );
           const roundMatches = rounds.get(roundNum) ?? [];
           const isFinalRound = roundNum === roundCount;
 
           return (
-            <div
-              key={roundNum}
-              className="flex flex-col"
-              style={{ width: roundWidth }}
-            >
-              {/* Round header */}
-              <div className="mb-1 px-3 pb-2.5 text-center">
+            <div key={roundNum} className="inline-flex items-stretch">
+              {/* Connector from previous round */}
+              {ri > 0 && (
                 <div
-                  className={`text-[11px] font-bold uppercase tracking-wide ${
-                    isFinalRound ? "text-primary" : "text-ink-muted"
-                  }`}
+                  className="flex flex-col shrink-0"
+                  style={{ width: connectorWidth }}
                 >
-                  {roundLabel(matchesInRound)}
-                </div>
-                <div className="mt-0.5 text-[10px] text-ink-faint">
-                  {matchesInRound}{" "}
-                  {matchesInRound > 1
-                    ? t("bracket.matchesPlural", "matchs")
-                    : t("bracket.matchSingular", "match")}
-                </div>
-                <div
-                  className={`mx-auto mt-2 h-px w-8 rounded-full ${
-                    isFinalRound ? "bg-primary/50" : "bg-border-muted"
-                  }`}
-                />
-              </div>
+                  {/* Empty header matching column header height */}
+                  <div className="h-[52px]" />
 
-              {/* Matches */}
+                  {/* SVG connector branches */}
+                  <div
+                    className="relative w-full shrink-0 rtl:scale-x-[-1]"
+                    style={{ height: totalTreeHeight }}
+                  >
+                    <svg
+                      className="w-full h-full pointer-events-none"
+                      viewBox={`0 0 ${connectorWidth} ${totalTreeHeight}`}
+                      fill="none"
+                    >
+                      {Array.from({ length: slotsInRound }, (_, k) => {
+                        const yTop =
+                          ((2 * k + 0.5) / (slotsInRound * 2)) * totalTreeHeight;
+                        const yBottom =
+                          ((2 * k + 1.5) / (slotsInRound * 2)) * totalTreeHeight;
+                        const yMid =
+                          ((k + 0.5) / slotsInRound) * totalTreeHeight;
+                        const midX = connectorWidth / 2;
+
+                        return (
+                          <g
+                            key={k}
+                            stroke="currentColor"
+                            className="text-border-muted"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            {/* Feeder from top previous match */}
+                            <path d={`M 0 ${yTop} H ${midX} V ${yMid} H ${connectorWidth}`} />
+                            {/* Feeder from bottom previous match */}
+                            <path d={`M 0 ${yBottom} H ${midX} V ${yMid}`} />
+                          </g>
+                        );
+                      })}
+                    </svg>
+                  </div>
+                </div>
+              )}
+
+              {/* Round match column */}
               <div
-                className="flex flex-col justify-around"
-                style={{
-                  minHeight:
-                    ((matchHeight + matchGap) * 2 ** (roundCount - 1)) / 2,
-                }}
+                className="flex flex-col"
+                style={{ width: roundWidth }}
               >
-                {roundMatches.map((m) => (
-                  <MatchCard
-                    key={m.id}
-                    match={m}
-                    auditIssue={roundNum === 1 ? auditByMatchId.get(m.id) : undefined}
-                    isSelected={selectedMatch === m.id}
-                    isSwapTarget={
-                      enableSwap &&
-                      roundNum === 1 &&
-                      !m.isBronze &&
-                      swapFirst !== null &&
-                      swapFirst !== m.id
-                    }
-                    isSwapFirst={swapFirst === m.id}
-                    enableSwap={enableSwap && roundNum === 1 && !m.isBronze}
-                    onSelect={() => {
-                      if (enableSwap && roundNum === 1 && !m.isBronze) {
-                        handleSwapSelect(m.id);
-                      } else {
-                        setSelectedMatch(selectedMatch === m.id ? null : m.id);
-                      }
-                    }}
-                    onSwapClick={
-                      enableSwap && roundNum === 1 && !m.isBronze
-                        ? () => handleSwapSelect(m.id)
-                        : undefined
-                    }
-                    onEnterResult={onEnterResult}
+                {/* Round header */}
+                <div className="h-[52px] px-3 pb-2 text-center flex flex-col justify-end">
+                  <div
+                    className={`text-[11px] font-bold uppercase tracking-wide ${
+                      isFinalRound ? "text-primary" : "text-ink-muted"
+                    }`}
+                  >
+                    {roundLabel(slotsInRound)}
+                  </div>
+                  <div className="mt-0.5 text-[10px] text-ink-faint">
+                    {slotsInRound}{" "}
+                    {slotsInRound > 1
+                      ? t("bracket.matchesPlural", "matchs")
+                      : t("bracket.matchSingular", "match")}
+                  </div>
+                  <div
+                    className={`mx-auto mt-1.5 h-px w-8 rounded-full ${
+                      isFinalRound ? "bg-primary/50" : "bg-border-muted"
+                    }`}
                   />
-                ))}
+                </div>
+
+                {/* Match slots container: exact height, perfectly centered slots */}
+                <div
+                  className="flex flex-col"
+                  style={{ height: totalTreeHeight }}
+                >
+                  {Array.from({ length: slotsInRound }, (_, k) => {
+                    const match = roundMatches.find((m) => m.ordinal === k + 1);
+                    return (
+                      <div
+                        key={k}
+                        className="flex-1 flex flex-col justify-center px-1 py-1 min-h-0 relative"
+                      >
+                        {match ? (
+                          <MatchCard
+                            match={match}
+                            auditIssue={
+                              roundNum === 1
+                                ? auditByMatchId.get(match.id)
+                                : undefined
+                            }
+                            isSelected={selectedMatch === match.id}
+                            isSwapTarget={
+                              enableSwap &&
+                              roundNum === 1 &&
+                              !match.isBronze &&
+                              swapFirst !== null &&
+                              swapFirst !== match.id
+                            }
+                            isSwapFirst={swapFirst === match.id}
+                            enableSwap={enableSwap && roundNum === 1 && !match.isBronze}
+                            onSelect={() => {
+                              if (enableSwap && roundNum === 1 && !match.isBronze) {
+                                handleSwapSelect(match.id);
+                              } else {
+                                setSelectedMatch(
+                                  selectedMatch === match.id ? null : match.id,
+                                );
+                              }
+                            }}
+                            onSwapClick={
+                              enableSwap && roundNum === 1 && !match.isBronze
+                                ? () => handleSwapSelect(match.id)
+                                : undefined
+                            }
+                            onEnterResult={onEnterResult}
+                          />
+                        ) : (
+                          <div className="mx-1 rounded-xl border border-dashed border-border-muted/60 bg-bg-faint/30 p-3 text-center text-xs text-ink-faint">
+                            —
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           );
         })}
 
+        {/* Final-to-Champion Connector */}
+        <div
+          className="flex flex-col shrink-0"
+          style={{ width: connectorWidth }}
+        >
+          <div className="h-[52px]" />
+          <div
+            className="relative w-full shrink-0 rtl:scale-x-[-1]"
+            style={{ height: totalTreeHeight }}
+          >
+            <svg
+              className="w-full h-full pointer-events-none"
+              viewBox={`0 0 ${connectorWidth} ${totalTreeHeight}`}
+              fill="none"
+            >
+              <line
+                x1={0}
+                y1={totalTreeHeight / 2}
+                x2={connectorWidth}
+                y2={totalTreeHeight / 2}
+                stroke="currentColor"
+                className="text-border-muted"
+                strokeWidth="1.5"
+                strokeDasharray="4 3"
+              />
+            </svg>
+          </div>
+        </div>
+
         {/* Champion column */}
-        <div className="flex flex-col" style={{ width: 160 }}>
-          <div className="mb-1 px-3 pb-2.5 text-center">
+        <div className="flex flex-col" style={{ width: 170 }}>
+          <div className="h-[52px] px-3 pb-2 text-center flex flex-col justify-end">
             <div className="flex items-center justify-center gap-1 text-[11px] font-bold uppercase tracking-wide text-primary">
               <Trophy size={12} />
               {t("bracket.champion", "Champion")}
             </div>
-            <div className="mx-auto mt-2 h-px w-8 rounded-full bg-primary/50" />
+            <div className="mt-0.5 text-[10px] text-ink-faint">&nbsp;</div>
+            <div className="mx-auto mt-1.5 h-px w-8 rounded-full bg-primary/50" />
           </div>
           <div
-            className="flex items-center justify-center"
-            style={{
-              minHeight: ((matchHeight + matchGap) * 2 ** (roundCount - 1)) / 2,
-            }}
+            className="flex flex-col justify-center items-center px-1"
+            style={{ height: totalTreeHeight }}
           >
             {bracket.matches.find(
               (m) =>
@@ -334,7 +496,7 @@ export default function BracketViewer({
                 m.round === roundCount &&
                 !m.isBronze,
             )?.winnerName ? (
-              <div className="relative flex flex-col items-center gap-2 rounded-2xl border-2 border-primary/40 bg-gradient-to-b from-primary/10 to-primary/[0.03] px-5 py-4 shadow-sm">
+              <div className="relative flex flex-col items-center gap-2 rounded-2xl border-2 border-primary/40 bg-gradient-to-b from-primary/10 to-primary/[0.03] px-5 py-4 shadow-sm w-full">
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/15">
                   <Trophy size={18} className="text-primary" />
                 </span>
@@ -350,7 +512,7 @@ export default function BracketViewer({
                 </span>
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-border-muted bg-bg-faint px-5 py-4">
+              <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-border-muted bg-bg-faint px-5 py-4 w-full">
                 <Trophy size={18} className="text-ink-faint/60" />
                 <span className="text-center text-xs text-ink-faint">
                   {t("bracket.pending", "En attente")}
@@ -361,10 +523,40 @@ export default function BracketViewer({
         </div>
       </div>
 
+      {/* Dedicated Bronze (3rd Place) Match Section */}
+      {bronzeMatch && (
+        <div className="mt-5 border-t border-border-muted pt-4">
+          <div className="flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wider text-warning">
+            <Trophy size={14} className="text-warning shrink-0" />
+            <span>
+              {t(
+                "bracket.bronzeMatchTitle",
+                "Petite Finale — Match pour la 3e place (Médaille de Bronze)",
+              )}
+            </span>
+          </div>
+          <div style={{ width: roundWidth }}>
+            <MatchCard
+              match={bronzeMatch}
+              isSelected={selectedMatch === bronzeMatch.id}
+              onSelect={() =>
+                setSelectedMatch(
+                  selectedMatch === bronzeMatch.id ? null : bronzeMatch.id,
+                )
+              }
+              onEnterResult={onEnterResult}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Selected match detail */}
       {selectedMatch && (() => {
         const match = bracket.matches.find((m) => m.id === selectedMatch);
-        if (!match) { setSelectedMatch(null); return null; }
+        if (!match) {
+          setSelectedMatch(null);
+          return null;
+        }
         return (
           <MatchDetail
             match={match}
@@ -384,10 +576,10 @@ function MatchCard({
   auditIssue,
   isSelected,
   onSelect,
-  onEnterResult,
+  onEnterResult: _onEnterResult,
   isSwapTarget,
   isSwapFirst,
-  onSwapClick,
+  onSwapClick: _onSwapClick,
   enableSwap,
 }: {
   match: BracketMatch;
@@ -435,6 +627,15 @@ function MatchCard({
     bgColor = "bg-primary/5";
   }
 
+  const shortWilayaA = formatWilayaShortFr(match.wilayaA, match.wilayaCodeA);
+  const shortWilayaB = formatWilayaShortFr(match.wilayaB, match.wilayaCodeB);
+  const fullWilayaA = match.wilayaA
+    ? `${match.wilayaA}${match.wilayaCodeA ? ` (${match.wilayaCodeA})` : ""}`
+    : undefined;
+  const fullWilayaB = match.wilayaB
+    ? `${match.wilayaB}${match.wilayaCodeB ? ` (${match.wilayaCodeB})` : ""}`
+    : undefined;
+
   return (
     <div
       onClick={onSelect}
@@ -446,32 +647,62 @@ function MatchCard({
           onSelect();
         }
       }}
-      className={`group relative mx-1.5 mb-1.5 overflow-hidden rounded-xl border ${borderColor} ${bgColor} ${ring} cursor-pointer shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+      className={`group relative overflow-hidden rounded-xl border ${borderColor} ${bgColor} ${ring} cursor-pointer shadow-xs transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
         match.isBronze ? "border-l-[3px] border-l-warning" : ""
       }`}
-      style={{ minHeight: 56 }}
     >
-      {/* Player A */}
+      {/* Player A (Red Corner / Coin Rouge) */}
       <div
-        className={`flex items-center gap-2 px-3 py-2 text-xs ${
+        className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs transition-colors border-l-[3px] border-l-red-500/80 bg-red-500/[0.02] ${
           isWinnerA
-            ? "font-bold text-success"
+            ? "font-bold text-success bg-success/[0.05]"
             : isBye && !match.nameA
               ? "text-ink-faint italic"
               : "text-ink"
         }`}
       >
+        {/* Red Corner Indicator */}
         <span
-          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${
-            isWinnerA ? "bg-success/15 text-success" : ""
-          }`}
+          className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-red-500/15 ring-1 ring-red-500/30"
+          title={t("bracket.redCorner", "Coin Rouge")}
         >
-          {isWinnerA ? "✓" : ""}
+          <span className="h-1.5 w-1.5 rounded-full bg-red-600" />
         </span>
-        <span className="flex-1 truncate">{match.nameA ?? "—"}</span>
+
+        {/* Winner Checkmark if completed */}
+        {isWinnerA && (
+          <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-success/20 text-[9px] font-bold text-success">
+            ✓
+          </span>
+        )}
+
+        {/* Competitor Name */}
+        <span
+          className="truncate font-medium text-xs max-w-[110px]"
+          title={match.nameA ?? "—"}
+        >
+          {match.nameA ?? "—"}
+        </span>
+
+        {/* Spacer pushing Wilaya to the end of field */}
+        <div className="flex-1 min-w-[4px]" />
+
+        {/* Shortened Wilaya in French */}
+        {shortWilayaA && (
+          <span
+            className="shrink-0 rounded bg-bg-muted/90 px-1 py-[1px] text-[9px] font-semibold text-ink-muted border border-border-subtle tracking-tight uppercase"
+            title={fullWilayaA}
+          >
+            {shortWilayaA}
+          </span>
+        )}
+
+        {/* Score */}
         {match.scoreA != null && (
           <span
-            className={`min-w-[1.25rem] text-center font-bold tabular-nums ${isWinnerA ? "text-success" : "text-ink"}`}
+            className={`min-w-[1.25rem] text-right font-bold tabular-nums ${
+              isWinnerA ? "text-success" : "text-ink"
+            }`}
           >
             {match.scoreA}
           </span>
@@ -479,29 +710,60 @@ function MatchCard({
       </div>
 
       {/* Divider */}
-      <div className="mx-2.5 h-px bg-border-muted" />
+      <div className="h-px bg-border-muted/70" />
 
-      {/* Player B */}
+      {/* Player B (Blue Corner / Coin Bleu) */}
       <div
-        className={`flex items-center gap-2 px-3 py-2 text-xs ${
+        className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs transition-colors border-l-[3px] border-l-blue-500/80 bg-blue-500/[0.02] ${
           isWinnerB
-            ? "font-bold text-success"
+            ? "font-bold text-success bg-success/[0.05]"
             : isBye && !match.nameB
               ? "text-ink-faint italic"
               : "text-ink"
         }`}
       >
+        {/* Blue Corner Indicator */}
         <span
-          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${
-            isWinnerB ? "bg-success/15 text-success" : ""
-          }`}
+          className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-blue-500/15 ring-1 ring-blue-500/30"
+          title={t("bracket.blueCorner", "Coin Bleu")}
         >
-          {isWinnerB ? "✓" : ""}
+          <span className="h-1.5 w-1.5 rounded-full bg-blue-600" />
         </span>
-        <span className="flex-1 truncate">{match.nameB ?? "—"}</span>
+
+        {/* Winner Checkmark if completed */}
+        {isWinnerB && (
+          <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-success/20 text-[9px] font-bold text-success">
+            ✓
+          </span>
+        )}
+
+        {/* Competitor Name */}
+        <span
+          className="truncate font-medium text-xs max-w-[110px]"
+          title={match.nameB ?? "—"}
+        >
+          {match.nameB ?? "—"}
+        </span>
+
+        {/* Spacer pushing Wilaya to the end of field */}
+        <div className="flex-1 min-w-[4px]" />
+
+        {/* Shortened Wilaya in French */}
+        {shortWilayaB && (
+          <span
+            className="shrink-0 rounded bg-bg-muted/90 px-1 py-[1px] text-[9px] font-semibold text-ink-muted border border-border-subtle tracking-tight uppercase"
+            title={fullWilayaB}
+          >
+            {shortWilayaB}
+          </span>
+        )}
+
+        {/* Score */}
         {match.scoreB != null && (
           <span
-            className={`min-w-[1.25rem] text-center font-bold tabular-nums ${isWinnerB ? "text-success" : "text-ink"}`}
+            className={`min-w-[1.25rem] text-right font-bold tabular-nums ${
+              isWinnerB ? "text-success" : "text-ink"
+            }`}
           >
             {match.scoreB}
           </span>
@@ -510,7 +772,7 @@ function MatchCard({
 
       {/* Status bar */}
       {isCompleted && (
-        <div className="flex items-center gap-1 border-t border-success/15 bg-success/[0.06] px-3 py-1 text-[10px] font-medium text-success/80">
+        <div className="flex items-center gap-1 border-t border-success/15 bg-success/[0.06] px-2.5 py-1 text-[10px] font-medium text-success/80">
           <CheckCircle size={10} />
           {match.resultType !== "REGULAR"
             ? match.resultType
@@ -518,12 +780,12 @@ function MatchCard({
         </div>
       )}
       {isBye && (
-        <div className="flex items-center gap-1 border-t border-border-muted px-3 py-1 text-[10px] text-ink-faint">
+        <div className="flex items-center gap-1 border-t border-border-muted px-2.5 py-0.5 text-[10px] text-ink-faint">
           Bye
         </div>
       )}
       {auditIssue && !isCompleted && !isBye && (
-        <div className="flex items-center gap-1 border-t border-warning/25 bg-warning/[0.09] px-3 py-1 text-[10px] font-semibold text-warning">
+        <div className="flex items-center gap-1 border-t border-warning/25 bg-warning/[0.09] px-2.5 py-0.5 text-[10px] font-semibold text-warning">
           <AlertTriangle size={10} className="shrink-0" />
           <span>
             {auditIssue.sameClub
@@ -535,13 +797,13 @@ function MatchCard({
         </div>
       )}
       {isSwapTarget && !isSwapFirst && (
-        <div className="flex items-center gap-1 border-t border-primary/20 bg-primary/[0.06] px-3 py-1 text-[10px] font-medium text-primary">
+        <div className="flex items-center gap-1 border-t border-primary/20 bg-primary/[0.06] px-2.5 py-0.5 text-[10px] font-medium text-primary">
           <ArrowLeftRight size={10} />
           {t("bracket.swap", "Échanger")}
         </div>
       )}
       {enableSwap && !isSwapTarget && !isSwapFirst && !isBye && !auditIssue && (
-        <div className="flex items-center gap-1 border-t border-transparent px-3 py-1 text-[10px] text-primary/50 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+        <div className="flex items-center gap-1 border-t border-transparent px-2.5 py-0.5 text-[10px] text-primary/50 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
           <ArrowLeftRight size={10} />
           {t("bracket.swapHint", "Cliquer pour échanger")}
         </div>
@@ -597,45 +859,68 @@ function MatchDetail({
 
       <div className="p-5">
         <div className="grid grid-cols-2 gap-4 text-sm">
+          {/* Competitor A (Coin Rouge) */}
           <div
-            className={`rounded-xl border px-3.5 py-3 ${
+            className={`rounded-xl border p-3.5 border-l-4 border-l-red-500 ${
               isWinnerA
                 ? "border-success/30 bg-success/[0.06]"
                 : "border-border-muted bg-bg-faint"
             }`}
           >
-            <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
-              {t("bracket.competitorA", "A")}
-              {isWinnerA && <CheckCircle size={11} className="text-success" />}
+            <div className="mb-1 flex items-center justify-between">
+              <span className="rounded bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
+                {t("bracket.redCorner", "Coin Rouge")}
+              </span>
+              {isWinnerA && <CheckCircle size={13} className="text-success" />}
             </div>
             <div
-              className={`font-semibold ${isWinnerA ? "text-success" : "text-ink"}`}
+              className={`font-semibold text-base mt-1 ${
+                isWinnerA ? "text-success" : "text-ink"
+              }`}
             >
               {match.nameA ?? "—"}
             </div>
-            {match.clubA && (
-              <div className="mt-0.5 text-xs text-ink-faint">{match.clubA}</div>
-            )}
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+              {match.clubA && <span>{match.clubA}</span>}
+              {match.wilayaA && (
+                <span className="rounded bg-bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-ink-muted">
+                  {match.wilayaA}
+                  {match.wilayaCodeA ? ` (${match.wilayaCodeA})` : ""}
+                </span>
+              )}
+            </div>
           </div>
+
+          {/* Competitor B (Coin Bleu) */}
           <div
-            className={`rounded-xl border px-3.5 py-3 ${
+            className={`rounded-xl border p-3.5 border-l-4 border-l-blue-500 ${
               isWinnerB
                 ? "border-success/30 bg-success/[0.06]"
                 : "border-border-muted bg-bg-faint"
             }`}
           >
-            <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
-              {t("bracket.competitorB", "B")}
-              {isWinnerB && <CheckCircle size={11} className="text-success" />}
+            <div className="mb-1 flex items-center justify-between">
+              <span className="rounded bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
+                {t("bracket.blueCorner", "Coin Bleu")}
+              </span>
+              {isWinnerB && <CheckCircle size={13} className="text-success" />}
             </div>
             <div
-              className={`font-semibold ${isWinnerB ? "text-success" : "text-ink"}`}
+              className={`font-semibold text-base mt-1 ${
+                isWinnerB ? "text-success" : "text-ink"
+              }`}
             >
               {match.nameB ?? "—"}
             </div>
-            {match.clubB && (
-              <div className="mt-0.5 text-xs text-ink-faint">{match.clubB}</div>
-            )}
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+              {match.clubB && <span>{match.clubB}</span>}
+              {match.wilayaB && (
+                <span className="rounded bg-bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-ink-muted">
+                  {match.wilayaB}
+                  {match.wilayaCodeB ? ` (${match.wilayaCodeB})` : ""}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 

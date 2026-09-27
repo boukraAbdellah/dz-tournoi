@@ -3,18 +3,18 @@ import { useTranslation } from "react-i18next";
 import { AlertTriangle, Pencil, UserPlus } from "lucide-react";
 import { useCompetition, catName } from "./CompetitionHook";
 import { useConfirm } from "../common/ConfirmDialog";
-import type { CompetitionDetail } from "./types";
+import type { CompetitionDetail, CompetitionCategory } from "./types";
 
 function CascadeSelect({
   categories, gender, ageCategoryId, weightDivisionId, onGenderChange, onAgeChange, onWeightChange,
 }: {
-  categories: any[]; gender: string; ageCategoryId: string; weightDivisionId: string;
+  categories: CompetitionCategory[]; gender: string; ageCategoryId: string; weightDivisionId: string;
   onGenderChange: (g: string) => void; onAgeChange: (id: string) => void; onWeightChange: (id: string) => void;
 }) {
   const { t } = useTranslation();
-  const genderCats = categories.filter((c: any) => c.enabled && c.gender === gender);
+  const genderCats = categories.filter((c) => c.enabled && c.gender === gender);
   const ageGroups = useMemo(() => {
-    const map = new Map<number, { id: number; name: string; weights: any[] }>();
+    const map = new Map<number, { id: number; name: string; weights: CompetitionCategory[] }>();
     for (const c of genderCats) {
       if (!map.has(c.ageCategoryId)) map.set(c.ageCategoryId, { id: c.ageCategoryId, name: c.ageCategoryName, weights: [] });
       map.get(c.ageCategoryId)!.weights.push(c);
@@ -41,7 +41,7 @@ function CascadeSelect({
       <select value={weightDivisionId} onChange={(e) => onWeightChange(e.target.value)}
         className="h-9 w-full rounded-lg border border-border bg-surface px-2 text-sm text-ink outline-none focus:border-primary/40">
         <option value="">{t("step.weightDivision", "Cat. de poids")}</option>
-        {weights.map((w: any) => (
+        {weights.map((w) => (
           <option key={w.id} value={w.weightDivisionId}>
             {w.weightDivisionName} {w.minKg != null && w.maxKg != null ? `(${w.minKg}–${w.maxKg} kg)` : w.maxKg != null ? `(-${w.maxKg} kg)` : `(+${w.minKg} kg)`}
           </option>

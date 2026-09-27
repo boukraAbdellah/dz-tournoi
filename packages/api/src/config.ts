@@ -18,7 +18,7 @@ export const config = {
   host: process.env.HOST ?? '127.0.0.1',
   dataDir: process.env.DATA_DIR ?? defaultDataDir(),
   staticDir: process.env.STATIC_DIR ?? join(defaultDataDir(), 'static'),
-  openBrowser: (process.env.OPEN_BROWSER ?? '1') !== '0',
+  openBrowser: process.env.OPEN_BROWSER === '1',
 };
 
 export function ensureDataDir(): void {

@@ -17,19 +17,11 @@ import {
   computeAudit,
   type DrawParticipant,
 } from '@sport-competition/core';
+import { ageAtDate } from '../utils.ts';
 
 export const drawRouter = Router();
 
 // ── Helpers ────────────────────────────────────────────────────────────
-
-function ageAtDate(birthDate: string, compDate: string): number {
-  const birth = new Date(birthDate);
-  const comp = new Date(compDate);
-  let age = comp.getFullYear() - birth.getFullYear();
-  const m = comp.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && comp.getDate() < birth.getDate())) age--;
-  return age;
-}
 
 const TRANSITIONS: Record<CompetitionStatus, CompetitionStatus[]> = {
   DRAFT: ['REGISTRATION_OPEN'],
@@ -472,12 +464,16 @@ drawRouter.get('/:id/bracket/:catId', (req, res) => {
     .where(eq(matches.competitionCategoryId, catId))
     .all();
 
-  // Enrich matches with athlete names
+  // Enrich matches with athlete names and wilayas
   const enriched = catMatches.map((m) => {
     let nameA: string | null = null;
     let nameB: string | null = null;
     let clubA: string | null = null;
     let clubB: string | null = null;
+    let wilayaA: string | null = null;
+    let wilayaB: string | null = null;
+    let wilayaCodeA: number | null = null;
+    let wilayaCodeB: number | null = null;
 
     if (m.competitorAId) {
       const reg = db.select({
@@ -494,6 +490,11 @@ drawRouter.get('/:id/bracket/:catId', (req, res) => {
         if (reg.clubId) {
           const club = db.select().from(clubs).where(eq(clubs.id, reg.clubId)).get();
           clubA = club?.name ?? null;
+          if (club?.wilayaId) {
+            const w = db.select().from(wilayas).where(eq(wilayas.id, club.wilayaId)).get();
+            wilayaA = w?.nameFr ?? null;
+            wilayaCodeA = w?.code ?? null;
+          }
         }
       }
     }
@@ -513,6 +514,11 @@ drawRouter.get('/:id/bracket/:catId', (req, res) => {
         if (reg.clubId) {
           const club = db.select().from(clubs).where(eq(clubs.id, reg.clubId)).get();
           clubB = club?.name ?? null;
+          if (club?.wilayaId) {
+            const w = db.select().from(wilayas).where(eq(wilayas.id, club.wilayaId)).get();
+            wilayaB = w?.nameFr ?? null;
+            wilayaCodeB = w?.code ?? null;
+          }
         }
       }
     }
@@ -542,6 +548,10 @@ drawRouter.get('/:id/bracket/:catId', (req, res) => {
       nameB,
       clubA,
       clubB,
+      wilayaA,
+      wilayaB,
+      wilayaCodeA,
+      wilayaCodeB,
       scoreA: m.scoreA,
       scoreB: m.scoreB,
       resultType: m.resultType,

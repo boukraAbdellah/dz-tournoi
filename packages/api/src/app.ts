@@ -11,6 +11,7 @@ import { importExportRouter } from './routes/importExport.ts';
 import { templatesRouter } from './routes/templates.ts';
 import { competitionsRouter } from './routes/competitions.ts';
 import { drawRouter } from './routes/draw.ts';
+import { documentsRouter } from './routes/documents.ts';
 
 export function createApp(): express.Express {
   const app = express();
@@ -25,6 +26,7 @@ export function createApp(): express.Express {
   app.use('/api/templates', templatesRouter);
   app.use('/api/competitions', competitionsRouter);
   app.use('/api/competitions', drawRouter);
+  app.use('/api/competitions', documentsRouter);
 
   // Health
   app.get('/api/health', (_req, res) => res.json({ ok: true }));

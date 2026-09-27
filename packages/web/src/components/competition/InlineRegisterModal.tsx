@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { X, CheckCircle, AlertTriangle } from "lucide-react";
 import DateInput from "../../components/DateInput";
 import { useCompetition, findMatchingCategory } from "./CompetitionHook";
+import type { CompetitionCategory } from "./types";
 
 function ageAtDate(birthDate: string, compDate: string): number {
   const birth = new Date(birthDate);
@@ -15,12 +16,12 @@ function ageAtDate(birthDate: string, compDate: string): number {
 
 function CategoryBadge({
   categories, gender, age, weightKg,
-}: { categories: any[]; gender: string; age: number | null; weightKg: number | null }) {
+}: { categories: CompetitionCategory[]; gender: string; age: number | null; weightKg: number | null }) {
   const { t } = useTranslation();
   if (age == null) return null;
   const matched = findMatchingCategory(categories, gender, age, weightKg);
   if (matched) {
-    const cat = categories.find((c: any) => c.id === matched);
+    const cat = categories.find((c) => c.id === matched);
     return (
       <span className="inline-flex items-center gap-1 rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[10px] font-semibold text-success">
         <CheckCircle size={10} />{cat ? `${cat.ageCategoryName} · ${cat.weightDivisionName}` : "—"}

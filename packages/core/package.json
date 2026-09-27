@@ -6,7 +6,7 @@
   "main": "src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test src/draw/bracket.test.ts src/draw/rankings.test.ts"
+    "test": "node --test src/draw/bracket.test.ts src/draw/rankings.test.ts src/competition/categories.test.ts"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

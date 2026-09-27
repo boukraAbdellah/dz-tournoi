@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Play, Pause, Zap, Swords, Flag, Trophy } from "lucide-react";
+import { ArrowLeft, Play, Pause, Zap, Swords, Flag, Trophy, FileText } from "lucide-react";
 import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
 import { CompetitionProvider, useCompetition } from "../components/competition/CompetitionHook";
@@ -9,19 +9,11 @@ import OverviewView from "../components/competition/OverviewView";
 import RegistrationsView from "../components/competition/RegistrationsView";
 import DrawView from "../components/competition/DrawView";
 import RankingsView from "../components/competition/RankingsView";
+import DocumentsView from "../components/competition/DocumentsView";
 import ToastContainer from "../components/competition/ToastContainer";
+import { STATUS_LABEL } from "../utils/statusLabels";
 
-const STATUS_LABEL: Record<string, string> = {
-  DRAFT: "Brouillon",
-  REGISTRATION_OPEN: "Inscriptions ouvertes",
-  REGISTRATION_CLOSED: "Inscriptions fermées",
-  DRAW_GENERATED: "Tableau généré",
-  DRAW_CONFIRMED: "Tableau confirmé",
-  IN_PROGRESS: "En cours",
-  COMPLETED: "Terminé",
-};
-
-type ViewTab = "overview" | "registrations" | "draw" | "rankings";
+type ViewTab = "overview" | "registrations" | "draw" | "rankings" | "documents";
 
 function CompetitionContent() {
   const { t } = useTranslation();
@@ -39,6 +31,7 @@ function CompetitionContent() {
     { key: "registrations", label: `${t("competitions.registrations")} (${regCount})`, icon: Zap, show: true },
     { key: "draw", label: t("competitions.bracket", "Tableau"), icon: Swords, show: showDrawTab },
     { key: "rankings", label: t("rankings.tabTitle", "Classements & Podiums"), icon: Trophy, show: showRankingsTab },
+    { key: "documents", label: t("documents.tabTitle", "Documents"), icon: FileText, show: true },
   ];
 
   return (
@@ -120,6 +113,7 @@ function CompetitionContent() {
       {activeView === "registrations" && <RegistrationsView />}
       {activeView === "draw" && <DrawView />}
       {activeView === "rankings" && <RankingsView />}
+      {activeView === "documents" && <DocumentsView competitionId={comp.id} />}
     </div>
   );
 }

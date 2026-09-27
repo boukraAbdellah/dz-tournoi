@@ -14,52 +14,11 @@ import {
   matches,
   computeCompetitionRankings,
   type CompetitionStatus,
+  findCategory,
 } from '@sport-competition/core';
+import { ageAtDate } from '../utils.ts';
 
 export const competitionsRouter = Router();
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-/** Calculate age at competition date */
-function ageAtDate(birthDate: string, compDate: string): number {
-  const birth = new Date(birthDate);
-  const comp = new Date(compDate);
-  let age = comp.getFullYear() - birth.getFullYear();
-  const m = comp.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && comp.getDate() < birth.getDate())) age--;
-  return age;
-}
-
-/** Find the first enabled category matching (gender, age, weight) */
-function findCategory(
-  cats: Array<{ id: number; gender: string; ageCategoryId: number; weightDivisionId: number; enabled: boolean }>,
-  ageCatMap: Map<number, { minAge: number; maxAge: number | null }>,
-  weightMap: Map<number, { minKg: number | null; maxKg: number | null }>,
-  gender: string,
-  age: number,
-  weightKg: number | null,
-): number | null {
-  for (const cat of cats) {
-    if (!cat.enabled) continue;
-    if (cat.gender !== gender) continue;
-
-    const ageCat = ageCatMap.get(cat.ageCategoryId);
-    const weight = weightMap.get(cat.weightDivisionId);
-    if (!ageCat || !weight) continue;
-
-    // Check age: [minAge, maxAge]
-    if (age < ageCat.minAge) continue;
-    if (ageCat.maxAge != null && age > ageCat.maxAge) continue;
-
-    // Check weight: [minKg, maxKg] (inclusive both ends)
-    if (weightKg == null) continue; // no weight → can't resolve
-    if (weight.minKg != null && weightKg < weight.minKg) continue;
-    if (weight.maxKg != null && weightKg > weight.maxKg) continue;
-
-    return cat.id;
-  }
-  return null;
-}
 
 // ── List ──────────────────────────────────────────────────────────────────
 competitionsRouter.get('/', (_req, res) => {

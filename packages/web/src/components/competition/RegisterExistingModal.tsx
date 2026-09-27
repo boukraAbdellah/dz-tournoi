@@ -4,7 +4,7 @@ import { X, Search, CheckCircle, AlertTriangle } from "lucide-react";
 import { api } from "../../api";
 import { isoToFr } from "../../utils/dates";
 import { useCompetition, findMatchingCategory } from "./CompetitionHook";
-import type { Athlete } from "./types";
+import type { Athlete, CompetitionCategory } from "./types";
 
 function ageAtDate(birthDate: string, compDate: string): number {
   const birth = new Date(birthDate);
@@ -21,7 +21,7 @@ function CategoryBadge({
   age,
   weightKg,
 }: {
-  categories: any[];
+  categories: CompetitionCategory[];
   gender: string;
   age: number | null;
   weightKg: number | null;
@@ -30,7 +30,7 @@ function CategoryBadge({
   if (age == null) return null;
   const matched = findMatchingCategory(categories, gender, age, weightKg);
   if (matched) {
-    const cat = categories.find((c: any) => c.id === matched);
+    const cat = categories.find((c) => c.id === matched);
     return (
       <span className="inline-flex items-center gap-1 rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[10px] font-semibold text-success">
         <CheckCircle size={10} />
@@ -56,7 +56,7 @@ function CascadeSelect({
   onAgeChange,
   onWeightChange,
 }: {
-  categories: any[];
+  categories: CompetitionCategory[];
   gender: string;
   ageCategoryId: string;
   weightDivisionId: string;
@@ -65,9 +65,9 @@ function CascadeSelect({
   onWeightChange: (id: string) => void;
 }) {
   const { t } = useTranslation();
-  const genderCats = categories.filter((c: any) => c.enabled && c.gender === gender);
+  const genderCats = categories.filter((c) => c.enabled && c.gender === gender);
   const ageGroups = useMemo(() => {
-    const map = new Map<number, { id: number; name: string; weights: any[] }>();
+    const map = new Map<number, { id: number; name: string; weights: CompetitionCategory[] }>();
     for (const c of genderCats) {
       if (!map.has(c.ageCategoryId)) map.set(c.ageCategoryId, { id: c.ageCategoryId, name: c.ageCategoryName, weights: [] });
       map.get(c.ageCategoryId)!.weights.push(c);
@@ -95,7 +95,7 @@ function CascadeSelect({
       <select value={weightDivisionId} onChange={(e) => onWeightChange(e.target.value)}
         className="h-9 w-full rounded-lg border border-border bg-surface px-2 text-sm text-ink outline-none focus:border-primary/40">
         <option value="">{t("step.weightDiv", "Poids")}</option>
-        {weights.map((w: any) => <option key={w.id} value={w.id}>{w.weightDivisionName}</option>)}
+        {weights.map((w) => <option key={w.id} value={w.id}>{w.weightDivisionName}</option>)}
       </select>
     </div>
   );

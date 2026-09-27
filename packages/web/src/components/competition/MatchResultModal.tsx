@@ -81,26 +81,35 @@ export default function MatchResultModal({ open, onClose, match }: Props) {
           <button onClick={onClose} className="text-ink-muted hover:text-ink"><X size={18} /></button>
         </div>
         <div className="px-6 py-5 space-y-4">
-          {/* Fighter A */}
+          {/* Fighter A (Red Corner) */}
           <div
             onClick={() => match.competitorAId && setSelectedWinnerId(match.competitorAId)}
-            className={`flex items-center justify-between rounded-lg border p-3 cursor-pointer transition-all ${
+            className={`flex items-center justify-between rounded-xl border p-3.5 cursor-pointer transition-all border-l-4 border-l-red-500 ${
               selectedWinnerId === match.competitorAId
-                ? "border-primary bg-primary/10 shadow-sm"
-                : "border-border bg-bg-subtle hover:border-primary/40"
+                ? "border-red-500 bg-red-500/10 shadow-sm ring-1 ring-red-500/20"
+                : "border-border bg-surface hover:border-red-500/40"
             }`}
           >
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-ink-muted">A</span>
+            <div className="flex-1 min-w-0 pr-3">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="rounded bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
+                  {t("bracket.redCorner", "Coin Rouge")}
+                </span>
                 {selectedWinnerId === match.competitorAId && (
-                  <span className="rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                  <span className="rounded bg-success/20 px-1.5 py-0.5 text-[10px] font-bold text-success">
                     {t("result.winner", "VAINQUEUR")}
                   </span>
                 )}
               </div>
-              <div className="text-sm font-semibold text-ink">{match.nameA ?? "—"}</div>
-              {match.clubA && <div className="text-xs text-ink-muted">{match.clubA}</div>}
+              <div className="text-sm font-semibold text-ink truncate">{match.nameA ?? "—"}</div>
+              <div className="flex items-center gap-2 mt-0.5 text-xs text-ink-muted">
+                {match.clubA && <span>{match.clubA}</span>}
+                {match.wilayaA && (
+                  <span className="rounded bg-bg-muted px-1.5 py-0.5 text-[10px] font-medium text-ink-muted">
+                    {match.wilayaA}
+                  </span>
+                )}
+              </div>
             </div>
             <input
               type="number"
@@ -108,33 +117,42 @@ export default function MatchResultModal({ open, onClose, match }: Props) {
               value={scoreA}
               onChange={(e) => handleScoreAChange(e.target.value)}
               onClick={(e) => e.stopPropagation()}
-              className="h-10 w-20 rounded-lg border border-border bg-surface px-3 text-center text-lg font-bold text-ink outline-none focus:border-primary/40"
+              className="h-10 w-20 rounded-lg border border-border bg-surface px-3 text-center text-lg font-bold text-ink outline-none focus:border-red-500/40"
               placeholder="0"
             />
           </div>
 
           <div className="text-center text-xs font-bold text-ink-faint">VS</div>
 
-          {/* Fighter B */}
+          {/* Fighter B (Blue Corner) */}
           <div
             onClick={() => match.competitorBId && setSelectedWinnerId(match.competitorBId)}
-            className={`flex items-center justify-between rounded-lg border p-3 cursor-pointer transition-all ${
+            className={`flex items-center justify-between rounded-xl border p-3.5 cursor-pointer transition-all border-l-4 border-l-blue-500 ${
               selectedWinnerId === match.competitorBId
-                ? "border-primary bg-primary/10 shadow-sm"
-                : "border-border bg-bg-subtle hover:border-primary/40"
+                ? "border-blue-500 bg-blue-500/10 shadow-sm ring-1 ring-blue-500/20"
+                : "border-border bg-surface hover:border-blue-500/40"
             }`}
           >
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-ink-muted">B</span>
+            <div className="flex-1 min-w-0 pr-3">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="rounded bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
+                  {t("bracket.blueCorner", "Coin Bleu")}
+                </span>
                 {selectedWinnerId === match.competitorBId && (
-                  <span className="rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                  <span className="rounded bg-success/20 px-1.5 py-0.5 text-[10px] font-bold text-primary">
                     {t("result.winner", "VAINQUEUR")}
                   </span>
                 )}
               </div>
-              <div className="text-sm font-semibold text-ink">{match.nameB ?? "—"}</div>
-              {match.clubB && <div className="text-xs text-ink-muted">{match.clubB}</div>}
+              <div className="text-sm font-semibold text-ink truncate">{match.nameB ?? "—"}</div>
+              <div className="flex items-center gap-2 mt-0.5 text-xs text-ink-muted">
+                {match.clubB && <span>{match.clubB}</span>}
+                {match.wilayaB && (
+                  <span className="rounded bg-bg-muted px-1.5 py-0.5 text-[10px] font-medium text-ink-muted">
+                    {match.wilayaB}
+                  </span>
+                )}
+              </div>
             </div>
             <input
               type="number"

@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Settings, UserPlus, Swords, Flag, Zap, Trophy } from "lucide-react";
 import { useCompetition } from "./CompetitionHook";
+import { STATUS_LABEL } from "../../utils/statusLabels";
 
 const LIFECYCLE_STEPS = [
   { key: "DRAFT", icon: Settings, labelKey: "step.draft" },
@@ -15,16 +16,6 @@ const LIFECYCLE_STEPS = [
 const STEP_INDEX: Record<string, number> = Object.fromEntries(
   LIFECYCLE_STEPS.map((s, i) => [s.key, i]),
 );
-
-const STATUS_LABEL: Record<string, string> = {
-  DRAFT: "Brouillon",
-  REGISTRATION_OPEN: "Inscriptions ouvertes",
-  REGISTRATION_CLOSED: "Inscriptions fermées",
-  DRAW_GENERATED: "Tableau généré",
-  DRAW_CONFIRMED: "Tableau confirmé",
-  IN_PROGRESS: "En cours",
-  COMPLETED: "Terminé",
-};
 
 export default function LifecycleStepper() {
   const { t } = useTranslation();
