@@ -31,15 +31,16 @@ importExportRouter.post('/import/athletes', upload.single('file'), async (req, r
     if (!sheet) return res.status(400).json({ error: 'Fichier Excel vide' });
 
     const db = getDb();
-    const allClubs = db.select({ id: clubs.id, name: clubs.name }).from(clubs).all();
+    const allClubs = await db.select({ id: clubs.id, name: clubs.name }).from(clubs).all();
     const clubByName = new Map(allClubs.map((c) => [c.name.toLowerCase(), c.id]));
 
     let created = 0;
     let skipped = 0;
     const errors: string[] = [];
-    const known = new Set(
-      db.select({ f: athletesTable.firstName, l: athletesTable.lastName, d: athletesTable.birthDate }).from(athletesTable).all().map((r) => `${r.f}|${r.l}|${r.d}`),
-    );
+    const knownRows = await db.select({ f: athletesTable.firstName, l: athletesTable.lastName, d: athletesTable.birthDate }).from(athletesTable).all();
+    const known = new Set(knownRows.map((r) => `${r.f}|${r.l}|${r.d}`));
+
+    const rowsToInsert: any[] = [];
 
     sheet.eachRow((row, rowNumber) => {
       if (rowNumber === 1) return; // header
@@ -67,20 +68,26 @@ importExportRouter.post('/import/athletes', upload.single('file'), async (req, r
         clubId = clubByName.get(clubName.toLowerCase()) ?? null;
         if (clubId == null) errors.push(`Ligne ${rowNumber}: club inconnu « ${clubName} »`);
       }
-      db.insert(athletesTable)
-        .values({
-          firstName,
-          lastName,
-          birthDate,
-          gender: gender as 'M' | 'F',
-          weightKg: weight ? Number(weight) : null,
-          phone: phone || null,
-          clubId,
-        })
-        .run();
+      rowsToInsert.push({
+        firstName,
+        lastName,
+        birthDate,
+        gender: gender as 'M' | 'F',
+        weightKg: weight ? Number(weight) : null,
+        phone: phone || null,
+        clubId,
+      });
       known.add(key);
-      created++;
     });
+
+    if (rowsToInsert.length > 0) {
+      await db.transaction(async (tx) => {
+        for (const item of rowsToInsert) {
+          await tx.insert(athletesTable).values(item).run();
+          created++;
+        }
+      });
+    }
 
     res.json({ created, skipped, errors });
   } catch (e) {
@@ -125,42 +132,50 @@ importExportRouter.get('/export/template', (_req, res) => {
   sendWorkbook(res, wb, 'Athletes.xlsx');
 });
 
-importExportRouter.get('/export/athletes', (_req, res) => {
-  const db = getDb();
-  const rows = db
-    .select({
-      ...getTableColumns(athletesTable),
-      clubName: clubs.name,
-    })
-    .from(athletesTable)
-    .leftJoin(clubs, eq(athletesTable.clubId, clubs.id))
-    .all();
-  const data = rows.map((r) => [
-    r.lastName,
-    r.firstName,
-    r.birthDate,
-    r.gender,
-    r.weightKg,
-    r.phone ?? '',
-    r.clubName ?? '',
-  ]);
-  const wb = buildWorkbook(HEADERS, data);
-  sendWorkbook(res, wb, 'athletes.xlsx');
+importExportRouter.get('/export/athletes', async (_req, res, next) => {
+  try {
+    const db = getDb();
+    const rows = await db
+      .select({
+        ...getTableColumns(athletesTable),
+        clubName: clubs.name,
+      })
+      .from(athletesTable)
+      .leftJoin(clubs, eq(athletesTable.clubId, clubs.id))
+      .all();
+    const data = rows.map((r) => [
+      r.lastName,
+      r.firstName,
+      r.birthDate,
+      r.gender,
+      r.weightKg,
+      r.phone ?? '',
+      r.clubName ?? '',
+    ]);
+    const wb = buildWorkbook(HEADERS, data);
+    sendWorkbook(res, wb, 'athletes.xlsx');
+  } catch (e) {
+    next(e);
+  }
 });
 
-importExportRouter.get('/export/clubs', (_req, res) => {
-  const db = getDb();
-  const rows = db
-    .select({
-      ...getTableColumns(clubs),
-      wilayaFr: wilayas.nameFr,
-      cityFr: citiesTable.nameFr,
-    })
-    .from(clubs)
-    .innerJoin(wilayas, eq(clubs.wilayaId, wilayas.id))
-    .innerJoin(citiesTable, eq(clubs.cityId, citiesTable.id))
-    .all();
-  const data = rows.map((r) => [r.name, r.wilayaFr, r.cityFr, r.email ?? '', r.phone ?? '', r.address ?? '', r.notes ?? '']);
-  const wb = buildWorkbook(['Nom', 'Wilaya', 'Commune', 'Email', 'Téléphone', 'Adresse', 'Notes'], data);
-  sendWorkbook(res, wb, 'clubs.xlsx');
+importExportRouter.get('/export/clubs', async (_req, res, next) => {
+  try {
+    const db = getDb();
+    const rows = await db
+      .select({
+        ...getTableColumns(clubs),
+        wilayaFr: wilayas.nameFr,
+        cityFr: citiesTable.nameFr,
+      })
+      .from(clubs)
+      .innerJoin(wilayas, eq(clubs.wilayaId, wilayas.id))
+      .innerJoin(citiesTable, eq(clubs.cityId, citiesTable.id))
+      .all();
+    const data = rows.map((r) => [r.name, r.wilayaFr, r.cityFr, r.email ?? '', r.phone ?? '', r.address ?? '', r.notes ?? '']);
+    const wb = buildWorkbook(['Nom', 'Wilaya', 'Commune', 'Email', 'Téléphone', 'Adresse', 'Notes'], data);
+    sendWorkbook(res, wb, 'clubs.xlsx');
+  } catch (e) {
+    next(e);
+  }
 });

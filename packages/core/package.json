@@ -9,6 +9,7 @@
     "test": "node --test src/draw/bracket.test.ts src/draw/rankings.test.ts src/competition/categories.test.ts"
   },
   "dependencies": {
+    "@libsql/client": "^0.18.0",
     "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.38.3"
   },

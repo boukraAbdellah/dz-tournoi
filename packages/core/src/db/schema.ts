@@ -194,6 +194,40 @@ export const matches = sqliteTable('match', {
   status: text('status', { enum: matchStatus }).notNull().default('PENDING'),
 });
 
+// ---------------------------------------------------------------------------
+// Authentication & RBAC
+// ---------------------------------------------------------------------------
+
+export const userRoles = ['ADMIN', 'LEAGUE_MANAGER'] as const;
+export type UserRole = (typeof userRoles)[number];
+
+export const users = sqliteTable('users', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  email: text('email').notNull().unique(),
+  passwordHash: text('password_hash').notNull(),
+  name: text('name').notNull(),
+  role: text('role', { enum: userRoles }).notNull().default('LEAGUE_MANAGER'),
+  wilayaId: integer('wilaya_id').references(() => wilayas.id),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`(datetime('now'))`),
+});
+
+export const registrationTokens = sqliteTable('registration_tokens', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  token: text('token').notNull().unique(),
+  competitionId: integer('competition_id')
+    .notNull()
+    .references(() => competitions.id, { onDelete: 'cascade' }),
+  wilayaId: integer('wilaya_id')
+    .notNull()
+    .references(() => wilayas.id),
+  expiresAt: text('expires_at').notNull(),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`(datetime('now'))`),
+});
+
 // Unique: one slot per (category, round, ordinal)
 export type Wilaya = typeof wilayas.$inferSelect;
 export type City = typeof cities.$inferSelect;
@@ -206,3 +240,7 @@ export type Competition = typeof competitions.$inferSelect;
 export type CompetitionCategory = typeof competitionCategories.$inferSelect;
 export type Registration = typeof registrations.$inferSelect;
 export type Match = typeof matches.$inferSelect;
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+export type RegistrationToken = typeof registrationTokens.$inferSelect;
+export type NewRegistrationToken = typeof registrationTokens.$inferInsert;

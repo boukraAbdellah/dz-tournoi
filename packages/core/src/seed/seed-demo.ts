@@ -8,14 +8,14 @@ import { runMigrations } from '../db/migrate.ts';
 import { count } from 'drizzle-orm';
 import { clubs, athletes } from '../db/schema.ts';
 import { seedClubs, seedAthletes } from './runner.ts';
-import { config, dbPath, ensureDataDir } from '../../../api/src/config.ts';
+import { dbPath, ensureDataDir } from '../../../api/src/config.ts';
 
 ensureDataDir();
 initDb(dbPath());
-runMigrations(getRawDb());
+await runMigrations(getRawDb());
 
-const clubCount = getDb().select({ n: count() }).from(clubs).get()?.n ?? 0;
-const athleteCount = getDb().select({ n: count() }).from(athletes).get()?.n ?? 0;
+const clubCount = (await getDb().select({ n: count() }).from(clubs).get())?.n ?? 0;
+const athleteCount = (await getDb().select({ n: count() }).from(athletes).get())?.n ?? 0;
 
 if (clubCount > 0 || athleteCount > 0) {
   console.log(`[seed:demo] DB already has ${clubCount} clubs + ${athleteCount} athletes — skipping.`);
@@ -23,6 +23,6 @@ if (clubCount > 0 || athleteCount > 0) {
   process.exit(0);
 }
 
-seedClubs();
-seedAthletes();
+await seedClubs();
+await seedAthletes();
 console.log('[seed:demo] Done.');

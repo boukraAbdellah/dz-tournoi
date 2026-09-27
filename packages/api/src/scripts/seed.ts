@@ -3,7 +3,7 @@ import { ensureDataDir, dbPath } from '../config.ts';
 
 ensureDataDir();
 initDb(dbPath());
-runMigrations(getRawDb());
-const seeded = seedIfEmpty();
+await runMigrations(getRawDb());
+const seeded = await seedIfEmpty();
 console.log(seeded ? 'Données de référence insérées.' : 'Données de référence déjà présentes.');
 process.exit(0);

@@ -2,7 +2,7 @@
 // Seeds a full multi-category tournament covering bracket sizes n=2, 3, 4, 7, 8, 16.
 // Usage: npm run seed:tournament
 
-import { eq, count, and } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { getDb, getRawDb, initDb } from '../db/connection.ts';
 import { runMigrations } from '../db/migrate.ts';
 import {
@@ -14,22 +14,20 @@ import {
   sportTemplates,
   ageCategories,
   weightDivisions,
-  wilayas,
-  cities,
 } from '../db/schema.ts';
 import { seedIfEmpty, seedClubs } from './runner.ts';
-import { config, dbPath, ensureDataDir } from '../../../api/src/config.ts';
+import { dbPath, ensureDataDir } from '../../../api/src/config.ts';
 
 ensureDataDir();
 initDb(dbPath());
-runMigrations(getRawDb());
-seedIfEmpty();
-seedClubs();
+await runMigrations(getRawDb());
+await seedIfEmpty();
+await seedClubs();
 
 const db = getDb();
 
 // ── Ensure standard test clubs ───────────────────────────────────────────
-const allClubs = db.select().from(clubs).all();
+const allClubs = await db.select().from(clubs).all();
 const clubMap = new Map(allClubs.map((c) => [c.name, c.id]));
 
 function getClubId(name: string): number {
@@ -45,17 +43,8 @@ const CLUB_MC_ORAN = getClubId('MC Oran');
 const CLUB_CS_CONSTANTINE = getClubId('CS Constantine');
 const CLUB_CRB_CHLEF = getClubId('CRB Chlef');
 
-const TEST_CLUBS = [
-  CLUB_AS_KABYLE,
-  CLUB_MC_ALGER,
-  CLUB_ES_SETIF,
-  CLUB_MC_ORAN,
-  CLUB_CS_CONSTANTINE,
-  CLUB_CRB_CHLEF,
-];
-
 // ── Template lookup ───────────────────────────────────────────────────────
-const karateTemplate = db.select().from(sportTemplates).where(eq(sportTemplates.slug, 'karate')).get();
+const karateTemplate = await db.select().from(sportTemplates).where(eq(sportTemplates.slug, 'karate')).get();
 if (!karateTemplate) {
   console.error('[seed] Karate template not found');
   process.exit(1);
@@ -65,14 +54,13 @@ if (!karateTemplate) {
 const compDate = '2026-10-15';
 const compName = 'Championnat National de Karaté 2026';
 
-let comp = db.select().from(competitions).where(eq(competitions.name, compName)).get();
+let comp = await db.select().from(competitions).where(eq(competitions.name, compName)).get();
 
 if (comp) {
-  // Delete existing competition to re-seed cleanly
-  db.delete(competitions).where(eq(competitions.id, comp.id)).run();
+  await db.delete(competitions).where(eq(competitions.id, comp.id)).run();
 }
 
-comp = db.insert(competitions).values({
+const [insertedComp] = await db.insert(competitions).values({
   name: compName,
   date: compDate,
   location: 'Coupole du Complexe Olympique Mohamed Boudiaf - Alger',
@@ -83,37 +71,37 @@ comp = db.insert(competitions).values({
   wilayaRankingEnabled: true,
   rankPoints: '{"gold":5,"silver":3,"bronze":1}',
   status: 'DRAFT',
-}).returning().get();
+}).returning();
+
+if (!insertedComp) {
+  console.error('Failed to create competition');
+  process.exit(1);
+}
+comp = insertedComp;
 
 console.log(`[seed] Created competition "${comp.name}" (id: ${comp.id})`);
 
 // ── Materialize Categories from Template ──────────────────────────────────
-const ages = db.select().from(ageCategories).where(eq(ageCategories.templateId, karateTemplate.id)).all();
-const weights = db.select().from(weightDivisions).where(eq(weightDivisions.templateId, karateTemplate.id)).all();
+const ages = await db.select().from(ageCategories).where(eq(ageCategories.templateId, karateTemplate.id)).all();
+const weights = await db.select().from(weightDivisions).where(eq(weightDivisions.templateId, karateTemplate.id)).all();
 
-for (const age of ages) {
-  for (const weight of weights) {
-    if (weight.ageCategoryId !== age.id) continue;
-    for (const gender of ['M', 'F'] as const) {
-      db.insert(competitionCategories).values({
-        competitionId: comp.id,
-        ageCategoryId: age.id,
-        weightDivisionId: weight.id,
-        gender,
-        enabled: true,
-        format: 'SINGLE_ELIM',
-      }).run();
+await db.transaction(async (tx) => {
+  for (const age of ages) {
+    for (const weight of weights) {
+      if (weight.ageCategoryId !== age.id) continue;
+      for (const gender of ['M', 'F'] as const) {
+        await tx.insert(competitionCategories).values({
+          competitionId: comp!.id,
+          ageCategoryId: age.id,
+          weightDivisionId: weight.id,
+          gender,
+          enabled: true,
+          format: 'SINGLE_ELIM',
+        }).run();
+      }
     }
   }
-}
-
-// ── Test Categories Specs ─────────────────────────────────────────────────
-// 1. Minimes M -45 kg (n=2)  -> age 12-13 (born 2013)
-// 2. Minimes M -50 kg (n=3)  -> age 12-13 (born 2013)
-// 3. Cadets M -55 kg (n=4)   -> age 14-15 (born 2011)
-// 4. Cadets M -60 kg (n=7)   -> age 14-15 (born 2011)
-// 5. Juniors M -65 kg (n=8)  -> age 16-17 (born 2009)
-// 6. Seniors M -67 kg (n=16) -> age 18+   (born 1998)
+});
 
 interface AthleteSeedDef {
   firstName: string;
@@ -126,39 +114,39 @@ interface AthleteSeedDef {
 }
 
 const SEED_ROSTER: AthleteSeedDef[] = [
-  // ── 1. Minimes M -45 kg (2 athletes) ──────────────────────────────────
-  { firstName: 'Yanis', lastName: 'Benali', birthDate: '2013-03-10', gender: 'M', weightKg: 43.5, clubId: CLUB_MC_ALGER, targetCategoryKey: 'Minimes:-45 kg:M' },
-  { firstName: 'Nassim', lastName: 'Idir', birthDate: '2013-07-22', gender: 'M', weightKg: 44.0, clubId: CLUB_AS_KABYLE, targetCategoryKey: 'Minimes:-45 kg:M' },
+  // ── 1. U13 M -45 kg (2 athletes) ──────────────────────────────────
+  { firstName: 'Yanis', lastName: 'Benali', birthDate: '2013-03-10', gender: 'M', weightKg: 43.5, clubId: CLUB_MC_ALGER, targetCategoryKey: 'U13:-45 kg:M' },
+  { firstName: 'Nassim', lastName: 'Idir', birthDate: '2013-07-22', gender: 'M', weightKg: 44.0, clubId: CLUB_AS_KABYLE, targetCategoryKey: 'U13:-45 kg:M' },
 
-  // ── 2. Minimes M -50 kg (3 athletes) ──────────────────────────────────
-  { firstName: 'Ayoub', lastName: 'Lounis', birthDate: '2013-02-14', gender: 'M', weightKg: 48.0, clubId: CLUB_ES_SETIF, targetCategoryKey: 'Minimes:-50 kg:M' },
-  { firstName: 'Rami', lastName: 'Bouzid', birthDate: '2013-05-19', gender: 'M', weightKg: 49.2, clubId: CLUB_MC_ORAN, targetCategoryKey: 'Minimes:-50 kg:M' },
-  { firstName: 'Zinedine', lastName: 'Saadi', birthDate: '2013-09-08', gender: 'M', weightKg: 47.5, clubId: CLUB_CS_CONSTANTINE, targetCategoryKey: 'Minimes:-50 kg:M' },
+  // ── 2. U13 M -50 kg (3 athletes) ──────────────────────────────────
+  { firstName: 'Ayoub', lastName: 'Lounis', birthDate: '2013-02-14', gender: 'M', weightKg: 48.0, clubId: CLUB_ES_SETIF, targetCategoryKey: 'U13:-50 kg:M' },
+  { firstName: 'Rami', lastName: 'Bouzid', birthDate: '2013-05-19', gender: 'M', weightKg: 49.2, clubId: CLUB_MC_ORAN, targetCategoryKey: 'U13:-50 kg:M' },
+  { firstName: 'Zinedine', lastName: 'Saadi', birthDate: '2013-09-08', gender: 'M', weightKg: 47.5, clubId: CLUB_CS_CONSTANTINE, targetCategoryKey: 'U13:-50 kg:M' },
 
-  // ── 3. Cadets M -55 kg (4 athletes) ───────────────────────────────────
-  { firstName: 'Anis', lastName: 'Belkacem', birthDate: '2011-05-10', gender: 'M', weightKg: 51.5, clubId: CLUB_AS_KABYLE, targetCategoryKey: 'Cadets:-55 kg:M' },
-  { firstName: 'Tarek', lastName: 'Ait Slimane', birthDate: '2012-03-25', gender: 'M', weightKg: 53.0, clubId: CLUB_MC_ALGER, targetCategoryKey: 'Cadets:-55 kg:M' },
-  { firstName: 'Mehdi', lastName: 'Bouzid', birthDate: '2011-07-02', gender: 'M', weightKg: 50.5, clubId: CLUB_ES_SETIF, targetCategoryKey: 'Cadets:-55 kg:M' },
-  { firstName: 'Adam', lastName: 'Mebarki', birthDate: '2012-01-15', gender: 'M', weightKg: 54.0, clubId: CLUB_MC_ORAN, targetCategoryKey: 'Cadets:-55 kg:M' },
+  // ── 3. U15 M -55 kg (4 athletes) ───────────────────────────────────
+  { firstName: 'Anis', lastName: 'Belkacem', birthDate: '2011-05-10', gender: 'M', weightKg: 51.5, clubId: CLUB_AS_KABYLE, targetCategoryKey: 'U15:-55 kg:M' },
+  { firstName: 'Tarek', lastName: 'Ait Slimane', birthDate: '2012-03-25', gender: 'M', weightKg: 53.0, clubId: CLUB_MC_ALGER, targetCategoryKey: 'U15:-55 kg:M' },
+  { firstName: 'Mehdi', lastName: 'Bouzid', birthDate: '2011-07-02', gender: 'M', weightKg: 50.5, clubId: CLUB_ES_SETIF, targetCategoryKey: 'U15:-55 kg:M' },
+  { firstName: 'Adam', lastName: 'Mebarki', birthDate: '2012-01-15', gender: 'M', weightKg: 54.0, clubId: CLUB_MC_ORAN, targetCategoryKey: 'U15:-55 kg:M' },
 
-  // ── 4. Cadets M -60 kg (7 athletes) ───────────────────────────────────
-  { firstName: 'Khaled', lastName: 'Ait Yahia', birthDate: '2011-09-18', gender: 'M', weightKg: 58.0, clubId: CLUB_AS_KABYLE, targetCategoryKey: 'Cadets:-60 kg:M' },
-  { firstName: 'Samy', lastName: 'Bouzian', birthDate: '2012-06-30', gender: 'M', weightKg: 59.5, clubId: CLUB_MC_ALGER, targetCategoryKey: 'Cadets:-60 kg:M' },
-  { firstName: 'Younes', lastName: 'Mansouri', birthDate: '2011-11-12', gender: 'M', weightKg: 57.0, clubId: CLUB_ES_SETIF, targetCategoryKey: 'Cadets:-60 kg:M' },
-  { firstName: 'Islam', lastName: 'Boumiza', birthDate: '2012-04-05', gender: 'M', weightKg: 58.5, clubId: CLUB_MC_ORAN, targetCategoryKey: 'Cadets:-60 kg:M' },
-  { firstName: 'Ryad', lastName: 'Charef', birthDate: '2011-02-20', gender: 'M', weightKg: 56.5, clubId: CLUB_CS_CONSTANTINE, targetCategoryKey: 'Cadets:-60 kg:M' },
-  { firstName: 'Abderrahmane', lastName: 'Djamel', birthDate: '2012-08-14', gender: 'M', weightKg: 59.0, clubId: CLUB_CRB_CHLEF, targetCategoryKey: 'Cadets:-60 kg:M' },
-  { firstName: 'Walid', lastName: 'Ghezali', birthDate: '2011-12-01', gender: 'M', weightKg: 57.8, clubId: CLUB_AS_KABYLE, targetCategoryKey: 'Cadets:-60 kg:M' },
+  // ── 4. U15 M -60 kg (7 athletes) ───────────────────────────────────
+  { firstName: 'Khaled', lastName: 'Ait Yahia', birthDate: '2011-09-18', gender: 'M', weightKg: 58.0, clubId: CLUB_AS_KABYLE, targetCategoryKey: 'U15:-60 kg:M' },
+  { firstName: 'Samy', lastName: 'Bouzian', birthDate: '2012-06-30', gender: 'M', weightKg: 59.5, clubId: CLUB_MC_ALGER, targetCategoryKey: 'U15:-60 kg:M' },
+  { firstName: 'Younes', lastName: 'Mansouri', birthDate: '2011-11-12', gender: 'M', weightKg: 57.0, clubId: CLUB_ES_SETIF, targetCategoryKey: 'U15:-60 kg:M' },
+  { firstName: 'Islam', lastName: 'Boumiza', birthDate: '2012-04-05', gender: 'M', weightKg: 58.5, clubId: CLUB_MC_ORAN, targetCategoryKey: 'U15:-60 kg:M' },
+  { firstName: 'Ryad', lastName: 'Charef', birthDate: '2011-02-20', gender: 'M', weightKg: 56.5, clubId: CLUB_CS_CONSTANTINE, targetCategoryKey: 'U15:-60 kg:M' },
+  { firstName: 'Abderrahmane', lastName: 'Djamel', birthDate: '2012-08-14', gender: 'M', weightKg: 59.0, clubId: CLUB_CRB_CHLEF, targetCategoryKey: 'U15:-60 kg:M' },
+  { firstName: 'Walid', lastName: 'Ghezali', birthDate: '2011-12-01', gender: 'M', weightKg: 57.8, clubId: CLUB_AS_KABYLE, targetCategoryKey: 'U15:-60 kg:M' },
 
-  // ── 5. Juniors M -68 kg (8 athletes) ──────────────────────────────────
-  { firstName: 'Amine', lastName: 'Guerfi', birthDate: '2009-03-12', gender: 'M', weightKg: 64.0, clubId: CLUB_MC_ALGER, targetCategoryKey: 'Juniors:-68 kg:M' },
-  { firstName: 'Bilel', lastName: 'Meziane', birthDate: '2009-08-25', gender: 'M', weightKg: 65.5, clubId: CLUB_AS_KABYLE, targetCategoryKey: 'Juniors:-68 kg:M' },
-  { firstName: 'Chamseddine', lastName: 'Khelil', birthDate: '2009-01-18', gender: 'M', weightKg: 63.0, clubId: CLUB_ES_SETIF, targetCategoryKey: 'Juniors:-68 kg:M' },
-  { firstName: 'Djamel', lastName: 'Bensalem', birthDate: '2009-11-04', gender: 'M', weightKg: 66.0, clubId: CLUB_MC_ORAN, targetCategoryKey: 'Juniors:-68 kg:M' },
-  { firstName: 'Elies', lastName: 'Rahmouni', birthDate: '2009-06-30', gender: 'M', weightKg: 62.5, clubId: CLUB_CS_CONSTANTINE, targetCategoryKey: 'Juniors:-68 kg:M' },
-  { firstName: 'Fares', lastName: 'Hamdani', birthDate: '2009-09-15', gender: 'M', weightKg: 65.8, clubId: CLUB_CRB_CHLEF, targetCategoryKey: 'Juniors:-68 kg:M' },
-  { firstName: 'Ghiles', lastName: 'Azzoug', birthDate: '2009-04-02', gender: 'M', weightKg: 64.2, clubId: CLUB_AS_KABYLE, targetCategoryKey: 'Juniors:-68 kg:M' },
-  { firstName: 'Houssam', lastName: 'Taibi', birthDate: '2009-10-20', gender: 'M', weightKg: 63.8, clubId: CLUB_MC_ALGER, targetCategoryKey: 'Juniors:-68 kg:M' },
+  // ── 5. U17 M -68 kg (8 athletes) ──────────────────────────────────
+  { firstName: 'Amine', lastName: 'Guerfi', birthDate: '2009-03-12', gender: 'M', weightKg: 64.0, clubId: CLUB_MC_ALGER, targetCategoryKey: 'U17:-68 kg:M' },
+  { firstName: 'Bilel', lastName: 'Meziane', birthDate: '2009-08-25', gender: 'M', weightKg: 65.5, clubId: CLUB_AS_KABYLE, targetCategoryKey: 'U17:-68 kg:M' },
+  { firstName: 'Chamseddine', lastName: 'Khelil', birthDate: '2009-01-18', gender: 'M', weightKg: 63.0, clubId: CLUB_ES_SETIF, targetCategoryKey: 'U17:-68 kg:M' },
+  { firstName: 'Djamel', lastName: 'Bensalem', birthDate: '2009-11-04', gender: 'M', weightKg: 66.0, clubId: CLUB_MC_ORAN, targetCategoryKey: 'U17:-68 kg:M' },
+  { firstName: 'Elies', lastName: 'Rahmouni', birthDate: '2009-06-30', gender: 'M', weightKg: 62.5, clubId: CLUB_CS_CONSTANTINE, targetCategoryKey: 'U17:-68 kg:M' },
+  { firstName: 'Fares', lastName: 'Hamdani', birthDate: '2009-09-15', gender: 'M', weightKg: 65.8, clubId: CLUB_CRB_CHLEF, targetCategoryKey: 'U17:-68 kg:M' },
+  { firstName: 'Ghiles', lastName: 'Azzoug', birthDate: '2009-04-02', gender: 'M', weightKg: 64.2, clubId: CLUB_AS_KABYLE, targetCategoryKey: 'U17:-68 kg:M' },
+  { firstName: 'Houssam', lastName: 'Taibi', birthDate: '2009-10-20', gender: 'M', weightKg: 63.8, clubId: CLUB_MC_ALGER, targetCategoryKey: 'U17:-68 kg:M' },
 
   // ── 6. Seniors M -68 kg (16 athletes) ─────────────────────────────────
   { firstName: 'Yacine', lastName: 'Belkacem', birthDate: '1998-04-12', gender: 'M', weightKg: 66.5, clubId: CLUB_MC_ALGER, targetCategoryKey: 'Seniors:-68 kg:M' },
@@ -180,7 +168,7 @@ const SEED_ROSTER: AthleteSeedDef[] = [
 ];
 
 // ── Map category key to competition category ID ───────────────────────────
-const compCats = db.select({
+const compCats = await db.select({
   id: competitionCategories.id,
   ageCategoryName: ageCategories.name,
   weightDivisionName: weightDivisions.name,
@@ -199,18 +187,18 @@ for (const c of compCats) {
 
 // Enable only our 6 target categories
 const targetKeys = new Set([
-  'Minimes:-45 kg:M',
-  'Minimes:-50 kg:M',
-  'Cadets:-55 kg:M',
-  'Cadets:-60 kg:M',
-  'Juniors:-68 kg:M',
+  'U13:-45 kg:M',
+  'U13:-50 kg:M',
+  'U15:-55 kg:M',
+  'U15:-60 kg:M',
+  'U17:-68 kg:M',
   'Seniors:-68 kg:M',
 ]);
 
-db.transaction((tx) => {
+await db.transaction(async (tx) => {
   for (const c of compCats) {
     const key = `${c.ageCategoryName}:${c.weightDivisionName}:${c.gender}`;
-    tx.update(competitionCategories)
+    await tx.update(competitionCategories)
       .set({ enabled: targetKeys.has(key) })
       .where(eq(competitionCategories.id, c.id))
       .run();
@@ -222,7 +210,7 @@ console.log(`[seed] Registering ${SEED_ROSTER.length} athletes across 6 target c
 
 let regCountTotal = 0;
 
-db.transaction((tx) => {
+await db.transaction(async (tx) => {
   for (const item of SEED_ROSTER) {
     const categoryId = catKeyToId.get(item.targetCategoryKey);
     if (!categoryId) {
@@ -231,7 +219,7 @@ db.transaction((tx) => {
     }
 
     // Insert or find athlete
-    const existing = tx.select().from(athletes)
+    const existing = await tx.select().from(athletes)
       .where(and(
         eq(athletes.firstName, item.firstName),
         eq(athletes.lastName, item.lastName),
@@ -241,19 +229,20 @@ db.transaction((tx) => {
 
     let athleteId = existing?.id;
     if (!athleteId) {
-      const created = tx.insert(athletes).values({
+      const [created] = await tx.insert(athletes).values({
         firstName: item.firstName,
         lastName: item.lastName,
         birthDate: item.birthDate,
         gender: item.gender,
         weightKg: item.weightKg,
         clubId: item.clubId,
-      }).returning().get();
+      }).returning();
+      if (!created) continue;
       athleteId = created.id;
     }
 
     // Register into competition
-    tx.insert(registrations).values({
+    await tx.insert(registrations).values({
       competitionId: comp!.id,
       athleteId,
       weightKg: item.weightKg,
@@ -267,12 +256,12 @@ db.transaction((tx) => {
 });
 
 // ── Transition Competition Status to REGISTRATION_CLOSED ──────────────────
-db.update(competitions)
+await db.update(competitions)
   .set({ status: 'REGISTRATION_OPEN' })
   .where(eq(competitions.id, comp.id))
   .run();
 
-db.update(competitions)
+await db.update(competitions)
   .set({ status: 'REGISTRATION_CLOSED' })
   .where(eq(competitions.id, comp.id))
   .run();
@@ -286,11 +275,11 @@ console.log(`  ⚙️ Status:      REGISTRATION_CLOSED (Ready for Draw Generatio
 console.log(`  👥 Total:       ${regCountTotal} athletes registered`);
 console.log('─────────────────────────────────────────────────────────────────────');
 console.log('  🎯 Configured Categories for Testing:');
-console.log('     1. Minimes M -45 kg  → 2 athletes  (Instant Final, n=2)');
-console.log('     2. Minimes M -50 kg  → 3 athletes  (1 Bye + Semi + Final, n=3)');
-console.log('     3. Cadets M -55 kg   → 4 athletes  (2 Semis + Bronze + Final, n=4)');
-console.log('     4. Cadets M -60 kg   → 7 athletes  (1 Bye + Quarters, n=7)');
-console.log('     5. Juniors M -68 kg  → 8 athletes  (Full 8-bracket, n=8)');
+console.log('     1. U13 M -45 kg      → 2 athletes  (Instant Final, n=2)');
+console.log('     2. U13 M -50 kg      → 3 athletes  (1 Bye + Semi + Final, n=3)');
+console.log('     3. U15 M -55 kg      → 4 athletes  (2 Semis + Bronze + Final, n=4)');
+console.log('     4. U15 M -60 kg      → 7 athletes  (1 Bye + Quarters, n=7)');
+console.log('     5. U17 M -68 kg      → 8 athletes  (Full 8-bracket, n=8)');
 console.log('     6. Seniors M -68 kg  → 16 athletes (Full 16-bracket, n=16)');
 console.log('═════════════════════════════════════════════════════════════════════');
 console.log(`\nOpen http://127.0.0.1:5175/competitions/${comp.id} to test draw generation!`);

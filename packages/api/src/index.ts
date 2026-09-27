@@ -3,11 +3,17 @@ import { getRawDb, initDb, runMigrations, seedIfEmpty } from '@sport-competition
 import { config, dbPath, ensureDataDir } from './config.ts';
 import { createApp } from './app.ts';
 
+try {
+  (process as any).loadEnvFile?.();
+} catch {
+  // ignore
+}
+
 ensureDataDir();
 
 initDb(dbPath());
-runMigrations(getRawDb());
-seedIfEmpty();
+await runMigrations(getRawDb());
+await seedIfEmpty();
 
 const app = createApp();
 app.listen(config.port, config.host, () => {

@@ -6,6 +6,7 @@ import i18n from './i18n';
 import App from './App';
 import { AppSettingsProvider } from './settings';
 import { ConfirmProvider } from './components/common/ConfirmDialog';
+import { AuthProvider } from './context/AuthContext';
 import './styles.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -14,7 +15,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <I18nextProvider i18n={i18n}>
         <ConfirmProvider>
           <BrowserRouter>
-            <App />
+            <AuthProvider>
+              <App />
+            </AuthProvider>
           </BrowserRouter>
         </ConfirmProvider>
       </I18nextProvider>

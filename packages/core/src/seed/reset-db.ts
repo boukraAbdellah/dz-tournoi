@@ -13,26 +13,26 @@ import {
   clubs,
 } from '../db/schema.ts';
 import { seedIfEmpty } from './runner.ts';
-import { config, dbPath, ensureDataDir } from '../../../api/src/config.ts';
+import { dbPath, ensureDataDir } from '../../../api/src/config.ts';
 
 ensureDataDir();
 initDb(dbPath());
-runMigrations(getRawDb());
+await runMigrations(getRawDb());
 
 const db = getDb();
 
 console.log('[reset-db] Truncating dynamic data...');
-db.transaction((tx) => {
-  tx.delete(matches).run();
-  tx.delete(registrations).run();
-  tx.delete(competitionCategories).run();
-  tx.delete(competitions).run();
-  tx.delete(athletes).run();
-  tx.delete(clubs).run();
+await db.transaction(async (tx) => {
+  await tx.delete(matches).run();
+  await tx.delete(registrations).run();
+  await tx.delete(competitionCategories).run();
+  await tx.delete(competitions).run();
+  await tx.delete(athletes).run();
+  await tx.delete(clubs).run();
 });
 
 console.log('[reset-db] Ensuring reference data (wilayas, cities, templates)...');
-seedIfEmpty();
+await seedIfEmpty();
 
 console.log('[reset-db] Database is clean and ready for fresh seeding!');
 process.exit(0);

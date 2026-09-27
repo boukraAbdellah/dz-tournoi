@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Play, Pause, Zap, Swords, Flag, Trophy, FileText } from "lucide-react";
+import { ArrowLeft, Play, Pause, Zap, Swords, Flag, Trophy, FileText, Share2 } from "lucide-react";
 import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
 import { CompetitionProvider, useCompetition } from "../components/competition/CompetitionHook";
@@ -11,6 +11,7 @@ import DrawView from "../components/competition/DrawView";
 import RankingsView from "../components/competition/RankingsView";
 import DocumentsView from "../components/competition/DocumentsView";
 import ToastContainer from "../components/competition/ToastContainer";
+import ShareLinksModal from "../components/competition/ShareLinksModal";
 import { STATUS_LABEL } from "../utils/statusLabels";
 
 type ViewTab = "overview" | "registrations" | "draw" | "rankings" | "documents";
@@ -19,6 +20,7 @@ function CompetitionContent() {
   const { t } = useTranslation();
   const { comp, loading, toasts, dismissToast, transition, resolveAll, generateDraw, drawLoading, isOpen, isDraft, isClosed, isDrawGenerated, isDrawConfirmed, isInProgress, isCompleted, regCount } = useCompetition();
   const [activeView, setActiveView] = useState<ViewTab>("overview");
+  const [shareOpen, setShareOpen] = useState(false);
 
   if (loading) return <div className="card-elevated py-16 text-center text-sm text-ink-muted">{t("common.loading")}</div>;
   if (!comp) return <div className="card-elevated py-16 text-center text-sm text-danger">Not found</div>;
@@ -37,6 +39,12 @@ function CompetitionContent() {
   return (
     <div>
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      <ShareLinksModal
+        competitionId={comp.id}
+        competitionName={comp.name}
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+      />
 
       <div className="mb-4">
         <Link to="/competitions" className="inline-flex items-center gap-1.5 text-sm text-ink-muted hover:text-ink transition-colors">
@@ -49,6 +57,15 @@ function CompetitionContent() {
         subtitle={`${comp.templateName ?? ""} · ${new Date(comp.date).toLocaleDateString("fr-FR")}${comp.location ? " · " + comp.location : ""}`}
         extra={
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShareOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-ink hover:bg-bg-subtle transition-colors cursor-pointer shadow-xs"
+              title="Partager le lien public et générer des liens de ligues"
+            >
+              <Share2 size={14} className="text-primary" />
+              <span>Partager / Ligues</span>
+            </button>
+
             <StatusBadge
               label={STATUS_LABEL[comp.status] ?? comp.status}
               tone={comp.status === "COMPLETED" ? "success" : comp.status === "IN_PROGRESS" ? "warning" : comp.status === "REGISTRATION_OPEN" ? "success" : comp.status === "REGISTRATION_CLOSED" ? "warning" : comp.status.startsWith("DRAW") ? "info" : "default"}

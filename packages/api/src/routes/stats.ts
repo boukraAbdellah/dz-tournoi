@@ -5,11 +5,18 @@ import { athletes, clubs, competitions } from '@sport-competition/core';
 
 export const statsRouter = Router();
 
-statsRouter.get('/', (_req, res) => {
-  const db = getDb();
-  res.json({
-    clubs: db.select({ n: count() }).from(clubs).get()?.n ?? 0,
-    athletes: db.select({ n: count() }).from(athletes).get()?.n ?? 0,
-    competitions: db.select({ n: count() }).from(competitions).get()?.n ?? 0,
-  });
+statsRouter.get('/', async (_req, res, next) => {
+  try {
+    const db = getDb();
+    const clubCount = (await db.select({ n: count() }).from(clubs).get())?.n ?? 0;
+    const athleteCount = (await db.select({ n: count() }).from(athletes).get())?.n ?? 0;
+    const compCount = (await db.select({ n: count() }).from(competitions).get())?.n ?? 0;
+    res.json({
+      clubs: clubCount,
+      athletes: athleteCount,
+      competitions: compCount,
+    });
+  } catch (err) {
+    next(err);
+  }
 });

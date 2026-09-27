@@ -3,6 +3,10 @@ import cors from 'cors';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { config } from './config.ts';
+import { authenticate, requireAuth } from './middleware/auth.ts';
+import { authRouter } from './routes/auth.ts';
+import { publicRouter } from './routes/public.ts';
+import { leagueRouter } from './routes/league.ts';
 import { referenceRouter } from './routes/reference.ts';
 import { clubsRouter } from './routes/clubs.ts';
 import { athletesRouter } from './routes/athletes.ts';
@@ -16,20 +20,29 @@ import { documentsRouter } from './routes/documents.ts';
 export function createApp(): express.Express {
   const app = express();
   app.use(cors());
-  app.use(express.json({ limit: '1mb' }));
+  app.use(express.json({ limit: '2mb' }));
 
+  // Attach user payload if valid Bearer token provided
+  app.use(authenticate);
+
+  // Auth, Public & League Portals (accessible without login)
+  app.use('/api/auth', authRouter);
+  app.use('/api/public', publicRouter);
+  app.use('/api/league', leagueRouter);
   app.use('/api', referenceRouter);
-  app.use('/api/clubs', clubsRouter);
-  app.use('/api/athletes', athletesRouter);
-  app.use('/api/stats', statsRouter);
-  app.use('/api', importExportRouter);
-  app.use('/api/templates', templatesRouter);
-  app.use('/api/competitions', competitionsRouter);
-  app.use('/api/competitions', drawRouter);
-  app.use('/api/competitions', documentsRouter);
+
+  // Core Management Routes (require authenticated user)
+  app.use('/api/clubs', requireAuth, clubsRouter);
+  app.use('/api/athletes', requireAuth, athletesRouter);
+  app.use('/api/stats', requireAuth, statsRouter);
+  app.use('/api', requireAuth, importExportRouter);
+  app.use('/api/templates', requireAuth, templatesRouter);
+  app.use('/api/competitions', requireAuth, competitionsRouter);
+  app.use('/api/competitions', requireAuth, drawRouter);
+  app.use('/api/competitions', requireAuth, documentsRouter);
 
   // Health
-  app.get('/api/health', (_req, res) => res.json({ ok: true }));
+  app.get('/api/health', (_req, res) => res.json({ ok: true, serverless: Boolean(process.env.VERCEL) }));
 
   // Serve the built web app (optional; missing in dev)
   const indexHtml = join(config.staticDir, 'index.html');

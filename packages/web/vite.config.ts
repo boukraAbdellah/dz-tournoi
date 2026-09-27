@@ -11,7 +11,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: '../../data/static',
+    outDir: process.env.VERCEL ? 'dist' : '../../data/static',
     emptyOutDir: true,
   },
 });

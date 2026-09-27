@@ -1,25 +1,65 @@
-import Database from 'better-sqlite3';
-import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
+import { createClient, type Client } from '@libsql/client';
+import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql';
 import * as schema from './schema.ts';
 
-let _db: BetterSQLite3Database<typeof schema> | undefined;
-let _sqlite: Database.Database | undefined;
+// Auto-load .env if present in Node environment
+try {
+  (process as any).loadEnvFile?.();
+} catch {
+  // ignore if .env does not exist
+}
 
-export function getDb(): BetterSQLite3Database<typeof schema> {
+let _db: LibSQLDatabase<typeof schema> | undefined;
+let _client: Client | undefined;
+
+export function getDb(): LibSQLDatabase<typeof schema> {
   if (!_db) throw new Error('Database not initialised. Call initDb() first.');
   return _db;
 }
 
-export function getRawDb(): Database.Database {
-  if (!_sqlite) throw new Error('Database not initialised. Call initDb() first.');
-  return _sqlite;
+export function getClient(): Client {
+  if (!_client) throw new Error('Database not initialised. Call initDb() first.');
+  return _client;
 }
 
-export function initDb(dbPath: string): BetterSQLite3Database<typeof schema> {
-  const sqlite = new Database(dbPath);
-  sqlite.pragma('journal_mode = WAL');
-  sqlite.pragma('foreign_keys = ON');
-  _sqlite = sqlite;
-  _db = drizzle(sqlite, { schema });
+// Backward compatibility alias
+export function getRawDb(): Client {
+  return getClient();
+}
+
+export function initDb(optionsOrPath?: string | { url?: string; authToken?: string }): LibSQLDatabase<typeof schema> {
+  let url: string;
+  let authToken: string | undefined;
+
+  const envUrl = process.env.TURSO_DATABASE_URL ?? process.env.DATABASE_URL;
+  const envToken = process.env.TURSO_AUTH_TOKEN ?? process.env.DATABASE_AUTH_TOKEN;
+
+  // Cloud environment variables take priority over default local file path
+  if (envUrl) {
+    url = envUrl;
+    authToken = envToken;
+  } else if (typeof optionsOrPath === 'string') {
+    url = optionsOrPath.startsWith('file:') || optionsOrPath.startsWith('http') || optionsOrPath.startsWith('libsql:')
+      ? optionsOrPath
+      : `file:${optionsOrPath.replace(/\\/g, '/')}`;
+  } else if (optionsOrPath && typeof optionsOrPath === 'object') {
+    url = optionsOrPath.url ?? 'file:data/sport.db';
+    authToken = optionsOrPath.authToken;
+  } else {
+    url = 'file:data/sport.db';
+  }
+
+  const isCloud = url.startsWith('libsql:') || url.startsWith('http');
+  if (isCloud) {
+    console.log(`[db] Connected to Turso Cloud: ${url.replace(/:[^@]+@/, ':***@')}`);
+  }
+
+  const client = createClient({
+    url,
+    authToken,
+  });
+
+  _client = client;
+  _db = drizzle(client, { schema });
   return _db;
 }
