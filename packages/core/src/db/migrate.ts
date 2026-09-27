@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Client } from '@libsql/client';
@@ -18,6 +18,11 @@ export async function runMigrations(client?: Client): Promise<void> {
 
   const appliedResult = await c.execute('SELECT name FROM _migrations');
   const applied = new Set(appliedResult.rows.map((r) => String(r.name)));
+
+  if (!existsSync(migrationsDir)) {
+    console.log('[migrate] migrations directory not present (bundled serverless environment), skipping disk migrations.');
+    return;
+  }
 
   const files = readdirSync(migrationsDir)
     .filter((f) => f.endsWith('.sql'))

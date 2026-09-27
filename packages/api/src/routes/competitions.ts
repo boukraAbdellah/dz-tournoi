@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { performance } from 'node:perf_hooks';
 import { eq, count, and, isNull } from 'drizzle-orm';
 import { getDb } from '@sport-competition/core';
 import {
@@ -21,9 +22,12 @@ import { ageAtDate } from '../utils.ts';
 export const competitionsRouter = Router();
 
 // ── List ──────────────────────────────────────────────────────────────────
+// TEMP-PERF: temporary timing probe to diagnose slow /api/competitions responses. Remove after investigation.
 competitionsRouter.get('/', async (_req, res, next) => {
+  const totalStart = performance.now();
   try {
     const db = getDb();
+    const dbStart = performance.now();
     const rows = await db.select({
       id: competitions.id,
       name: competitions.name,
@@ -37,17 +41,23 @@ competitionsRouter.get('/', async (_req, res, next) => {
       .leftJoin(sportTemplates, eq(competitions.sportTemplateId, sportTemplates.id))
       .orderBy(competitions.date)
       .all();
+    const dbEnd = performance.now();
+    console.log(`[TEMP-PERF] GET /api/competitions DB query: ${(dbEnd - dbStart).toFixed(2)} ms`);
     res.json(rows);
+    console.log(`[TEMP-PERF] GET /api/competitions total route: ${(performance.now() - totalStart).toFixed(2)} ms`);
   } catch (err) {
     next(err);
   }
 });
 
 // ── Get one ───────────────────────────────────────────────────────────────
+// TEMP-PERF: temporary timing probe to diagnose slow /api/competitions/:id responses. Remove after investigation.
 competitionsRouter.get('/:id', async (req, res, next) => {
+  const totalStart = performance.now();
   try {
     const id = Number(req.params.id);
     const db = getDb();
+    const q0 = performance.now();
     const row = await db.select({
       id: competitions.id,
       name: competitions.name,
@@ -66,6 +76,8 @@ competitionsRouter.get('/:id', async (req, res, next) => {
       .leftJoin(sportTemplates, eq(competitions.sportTemplateId, sportTemplates.id))
       .where(eq(competitions.id, id))
       .get();
+    const q1 = performance.now();
+    console.log(`[TEMP-PERF] GET /api/competitions/${req.params.id} query competition: ${(q1 - q0).toFixed(2)} ms`);
     if (!row) return res.status(404).json({ error: 'Competition not found' });
 
     const categories = await db.select({
@@ -90,6 +102,8 @@ competitionsRouter.get('/:id', async (req, res, next) => {
       .innerJoin(weightDivisions, eq(competitionCategories.weightDivisionId, weightDivisions.id))
       .where(eq(competitionCategories.competitionId, id))
       .all();
+    const q2 = performance.now();
+    console.log(`[TEMP-PERF] GET /api/competitions/${req.params.id} query categories: ${(q2 - q1).toFixed(2)} ms`);
 
     // Fetch all active registrations once for fast in-memory aggregation
     const allCompRegs = await db.select({
@@ -102,6 +116,9 @@ competitionsRouter.get('/:id', async (req, res, next) => {
         eq(registrations.status, 'REGISTERED'),
       ))
       .all();
+    const q3 = performance.now();
+    console.log(`[TEMP-PERF] GET /api/competitions/${req.params.id} query registrations: ${(q3 - q2).toFixed(2)} ms`);
+    console.log(`[TEMP-PERF] GET /api/competitions/${req.params.id} total DB: ${(q3 - q0).toFixed(2)} ms`);
 
     const regCountByCat = new Map<number, number>();
     let unresolvedCount = 0;
@@ -124,6 +141,7 @@ competitionsRouter.get('/:id', async (req, res, next) => {
       totalRegistrations: allCompRegs.length,
       unresolvedCount,
     });
+    console.log(`[TEMP-PERF] GET /api/competitions/${req.params.id} total route: ${(performance.now() - totalStart).toFixed(2)} ms`);
   } catch (err) {
     next(err);
   }

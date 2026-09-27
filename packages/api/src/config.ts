@@ -13,11 +13,19 @@ function defaultDataDir(): string {
   return join(homedir(), '.sport-competition');
 }
 
+function defaultStaticDir(): string {
+  if (process.env.STATIC_DIR) return process.env.STATIC_DIR;
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rootDist = join(here, '..', '..', '..', 'dist');
+  if (existsSync(rootDist)) return rootDist;
+  return join(defaultDataDir(), 'static');
+}
+
 export const config = {
   port: Number(process.env.PORT ?? 5175),
   host: process.env.HOST ?? '127.0.0.1',
   dataDir: process.env.DATA_DIR ?? defaultDataDir(),
-  staticDir: process.env.STATIC_DIR ?? join(defaultDataDir(), 'static'),
+  staticDir: defaultStaticDir(),
   openBrowser: process.env.OPEN_BROWSER === '1',
 };
 

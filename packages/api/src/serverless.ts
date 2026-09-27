@@ -1,5 +1,5 @@
 import { initDb, runMigrations, seedIfEmpty } from '@sport-competition/core';
-import { createApp } from '../packages/api/src/app.ts';
+import { createApp } from './app.ts';
 
 let initialized = false;
 let initPromise: Promise<void> | null = null;

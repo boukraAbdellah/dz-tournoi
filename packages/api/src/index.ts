@@ -1,4 +1,5 @@
 import { exec } from 'node:child_process';
+import { performance } from 'node:perf_hooks';
 import { getRawDb, initDb, runMigrations, seedIfEmpty } from '@sport-competition/core';
 import { config, dbPath, ensureDataDir } from './config.ts';
 import { createApp } from './app.ts';
@@ -14,6 +15,18 @@ ensureDataDir();
 initDb(dbPath());
 await runMigrations(getRawDb());
 await seedIfEmpty();
+
+// TEMP-PERF: one-time startup probe (runs once at boot, not per request). Remove after investigation.
+async function testTurso(): Promise<void> {
+  const client = getRawDb();
+  for (let i = 1; i <= 10; i++) {
+    const start = performance.now();
+    await client.execute('SELECT 1');
+    console.log(`[TEMP-PERF] SELECT 1 #${i}: ${(performance.now() - start).toFixed(2)} ms`);
+  }
+}
+await testTurso();
+
 
 const app = createApp();
 app.listen(config.port, config.host, () => {
