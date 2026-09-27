@@ -12,7 +12,7 @@
     "dev:web": "npm run dev -w packages/web",
     "dev": "npm run dev:api",
     "build:web": "npm run build -w packages/web",
-    "build:api": "esbuild packages/api/src/serverless.ts --bundle --platform=node --format=esm --target=node20 --outfile=api/index.js",
+    "build:api": "esbuild packages/api/src/serverless.ts --bundle --platform=node --format=esm --target=node20 --outfile=api/index.js --banner:js=\"import { createRequire } from 'module'; const require = createRequire(import.meta.url);\"",
     "build": "npm run build:web && npm run build:api",
     "typecheck": "npm run typecheck -w packages/core && npm run typecheck -w packages/api && npm run typecheck -w packages/web",
     "test": "npm run test -w packages/core",
