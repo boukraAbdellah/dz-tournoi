@@ -33,6 +33,7 @@ export function createApp(): express.Express {
   app.use('/api/public', publicRouter);
   app.use('/api/league', leagueRouter);
   app.use('/api', referenceRouter);
+  app.use('/api/competitions', documentsRouter);
 
   // Core Management Routes (require authenticated user)
   app.use('/api/clubs', requireAuth, clubsRouter);
@@ -42,7 +43,6 @@ export function createApp(): express.Express {
   app.use('/api/templates', requireAuth, templatesRouter);
   app.use('/api/competitions', requireAuth, competitionsRouter);
   app.use('/api/competitions', requireAuth, drawRouter);
-  app.use('/api/competitions', requireAuth, documentsRouter);
 
   // Serve the built web app (optional; missing in dev)
   const indexHtml = join(config.staticDir, 'index.html');

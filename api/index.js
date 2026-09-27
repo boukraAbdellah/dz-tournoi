@@ -120351,6 +120351,7 @@ function createApp() {
   app2.use("/api/public", publicRouter);
   app2.use("/api/league", leagueRouter);
   app2.use("/api", referenceRouter);
+  app2.use("/api/competitions", documentsRouter);
   app2.use("/api/clubs", requireAuth, clubsRouter);
   app2.use("/api/athletes", requireAuth, athletesRouter);
   app2.use("/api/stats", requireAuth, statsRouter);
@@ -120358,7 +120359,6 @@ function createApp() {
   app2.use("/api/templates", requireAuth, templatesRouter);
   app2.use("/api/competitions", requireAuth, competitionsRouter);
   app2.use("/api/competitions", requireAuth, drawRouter);
-  app2.use("/api/competitions", requireAuth, documentsRouter);
   const indexHtml = join3(config.staticDir, "index.html");
   if (existsSync3(indexHtml)) {
     app2.use(import_express13.default.static(config.staticDir));

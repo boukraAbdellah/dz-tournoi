@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Printer, Download, Globe, RefreshCw, ExternalLink } from 'lucide-react';
+import { API_BASE } from '../../api';
 
 interface Props {
   competitionId: number;
@@ -45,12 +46,12 @@ export default function DocumentPreviewModal({
     params.set('certType', certType);
   }
 
-  const previewUrl = `/api/competitions/${competitionId}/documents/${endpoint}?${params.toString()}`;
+  const previewUrl = `${API_BASE}/competitions/${competitionId}/documents/${endpoint}?${params.toString()}`;
 
   const downloadPdf = () => {
     const pdfParams = new URLSearchParams(params);
     pdfParams.set('format', 'pdf');
-    const pdfUrl = `/api/competitions/${competitionId}/documents/${endpoint}?${pdfParams.toString()}`;
+    const pdfUrl = `${API_BASE}/competitions/${competitionId}/documents/${endpoint}?${pdfParams.toString()}`;
     window.open(pdfUrl, '_blank');
   };
 

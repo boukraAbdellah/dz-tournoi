@@ -28,20 +28,25 @@ const db = getDb();
 
 // ── Ensure standard test clubs ───────────────────────────────────────────
 const allClubs = await db.select().from(clubs).all();
+if (allClubs.length === 0) {
+  console.error('[seed] No clubs found in database. Please seed or create clubs first.');
+  process.exit(1);
+}
 const clubMap = new Map(allClubs.map((c) => [c.name, c.id]));
 
-function getClubId(name: string): number {
+function getClubId(name: string, fallbackSlotIndex: number): number {
   const id = clubMap.get(name);
   if (id) return id;
-  return allClubs[0]?.id ?? 1;
+  // If named demo club is not present, distribute across available clubs/leagues in DB
+  return allClubs[fallbackSlotIndex % allClubs.length]?.id ?? 1;
 }
 
-const CLUB_AS_KABYLE = getClubId('AS Kabyle');
-const CLUB_MC_ALGER = getClubId('MC Alger');
-const CLUB_ES_SETIF = getClubId('ES Sétif');
-const CLUB_MC_ORAN = getClubId('MC Oran');
-const CLUB_CS_CONSTANTINE = getClubId('CS Constantine');
-const CLUB_CRB_CHLEF = getClubId('CRB Chlef');
+const CLUB_AS_KABYLE = getClubId('AS Kabyle', 0);
+const CLUB_MC_ALGER = getClubId('MC Alger', 1);
+const CLUB_ES_SETIF = getClubId('ES Sétif', 2);
+const CLUB_MC_ORAN = getClubId('MC Oran', 3);
+const CLUB_CS_CONSTANTINE = getClubId('CS Constantine', 4);
+const CLUB_CRB_CHLEF = getClubId('CRB Chlef', 5);
 
 // ── Template lookup ───────────────────────────────────────────────────────
 const karateTemplate = await db.select().from(sportTemplates).where(eq(sportTemplates.slug, 'karate')).get();
@@ -52,7 +57,7 @@ if (!karateTemplate) {
 
 // ── Create Competition ────────────────────────────────────────────────────
 const compDate = '2026-10-15';
-const compName = 'Championnat National de Karaté 2026';
+const compName = process.argv[2] ?? 'Championnat Karaté';
 
 let comp = await db.select().from(competitions).where(eq(competitions.name, compName)).get();
 
@@ -239,6 +244,8 @@ await db.transaction(async (tx) => {
       }).returning();
       if (!created) continue;
       athleteId = created.id;
+    } else {
+      await tx.update(athletes).set({ clubId: item.clubId }).where(eq(athletes.id, athleteId)).run();
     }
 
     // Register into competition

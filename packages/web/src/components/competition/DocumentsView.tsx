@@ -15,6 +15,7 @@ import {
   Award,
 } from 'lucide-react';
 import DocumentPreviewModal from './DocumentPreviewModal';
+import { api, API_BASE } from '../../api';
 
 interface Props {
   competitionId: number;
@@ -41,8 +42,10 @@ export default function DocumentsView({ competitionId }: Props) {
   const [previewDoc, setPreviewDoc] = useState<{ key: string; title: string } | null>(null);
 
   useEffect(() => {
-    fetch(`/api/competitions/${competitionId}/documents`)
-      .then((res) => res.json())
+    api
+      .get<{ catalog?: CatalogDoc[]; categories?: Array<{ id: number; name: string }> }>(
+        `/competitions/${competitionId}/documents`,
+      )
       .then((data) => {
         if (data.catalog) setCatalog(data.catalog);
         if (data.categories) setCategories(data.categories);
@@ -104,7 +107,7 @@ export default function DocumentsView({ competitionId }: Props) {
     }
 
     const lang = endpoint === 'certificates' ? 'ar' : isArabic ? 'ar' : 'fr';
-    const url = `/api/competitions/${competitionId}/documents/${endpoint}?format=pdf&lang=${lang}${extra}`;
+    const url = `${API_BASE}/competitions/${competitionId}/documents/${endpoint}?format=pdf&lang=${lang}${extra}`;
     window.open(url, '_blank');
   };
 
