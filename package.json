@@ -12,7 +12,7 @@
     "dev:web": "npm run dev -w packages/web",
     "dev": "npm run dev:api",
     "build:web": "npm run build -w packages/web",
-    "build:api": "esbuild packages/api/src/serverless.ts --bundle --platform=node --format=esm --target=node20 --outfile=api/index.js --external:@libsql/client",
+    "build:api": "esbuild packages/api/src/serverless.ts --bundle --platform=node --format=esm --target=node20 --outfile=api/index.js",
     "build": "npm run build:web && npm run build:api",
     "typecheck": "npm run typecheck -w packages/core && npm run typecheck -w packages/api && npm run typecheck -w packages/web",
     "test": "npm run test -w packages/core",
@@ -22,6 +22,9 @@
     "seed:tournament": "node packages/core/src/seed/seed-tournament.ts",
     "check:draw": "node check-draw.js",
     "start": "npm run build && node packages/api/src/index.ts"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.18.0"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",

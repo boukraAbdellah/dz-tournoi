@@ -43,10 +43,13 @@ export function initDb(optionsOrPath?: string | { url?: string; authToken?: stri
       ? optionsOrPath
       : `file:${optionsOrPath.replace(/\\/g, '/')}`;
   } else if (optionsOrPath && typeof optionsOrPath === 'object') {
-    url = optionsOrPath.url ?? 'file:data/sport.db';
+    url = optionsOrPath.url ?? (process.env.VERCEL ? 'file:/tmp/sport.db' : 'file:data/sport.db');
     authToken = optionsOrPath.authToken;
   } else {
-    url = 'file:data/sport.db';
+    url = process.env.VERCEL ? 'file:/tmp/sport.db' : 'file:data/sport.db';
+    if (process.env.VERCEL) {
+      console.warn('[db] WARNING: TURSO_DATABASE_URL environment variable is not defined in Vercel! Falling back to /tmp/sport.db');
+    }
   }
 
   const isCloud = url.startsWith('libsql:') || url.startsWith('http');

@@ -1,29 +1,17 @@
 import { initDb, runMigrations, seedIfEmpty } from '@sport-competition/core';
 import { createApp } from './app.ts';
 
-let initialized = false;
-let initPromise: Promise<void> | null = null;
-
-async function ensureInitialized() {
-  if (initialized) return;
-  if (!initPromise) {
-    initPromise = (async () => {
-      initDb();
-      try {
-        await runMigrations();
-        await seedIfEmpty();
-      } catch (err) {
-        console.error('[serverless] Initialization error/warning:', err);
-      }
-      initialized = true;
-    })();
-  }
-  await initPromise;
+// Initialize DB synchronously so getDb() is always available immediately
+try {
+  initDb();
+} catch (err) {
+  console.error('[serverless] Failed to initDb():', err);
 }
+
+// Ensure migrations & seeds run asynchronously
+runMigrations().catch((err) => console.warn('[serverless] migrations notice:', err?.message ?? err));
+seedIfEmpty().catch((err) => console.warn('[serverless] seed notice:', err?.message ?? err));
 
 const app = createApp();
 
-export default async function handler(req: any, res: any) {
-  await ensureInitialized();
-  return app(req, res);
-}
+export default app;

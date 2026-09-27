@@ -25,6 +25,9 @@ export function createApp(): express.Express {
   // Attach user payload if valid Bearer token provided
   app.use(authenticate);
 
+  // Health probe (always accessible, public)
+  app.get('/api/health', (_req, res) => res.json({ ok: true, serverless: Boolean(process.env.VERCEL) }));
+
   // Auth, Public & League Portals (accessible without login)
   app.use('/api/auth', authRouter);
   app.use('/api/public', publicRouter);
@@ -40,9 +43,6 @@ export function createApp(): express.Express {
   app.use('/api/competitions', requireAuth, competitionsRouter);
   app.use('/api/competitions', requireAuth, drawRouter);
   app.use('/api/competitions', requireAuth, documentsRouter);
-
-  // Health
-  app.get('/api/health', (_req, res) => res.json({ ok: true, serverless: Boolean(process.env.VERCEL) }));
 
   // Serve the built web app (optional; missing in dev)
   const indexHtml = join(config.staticDir, 'index.html');
